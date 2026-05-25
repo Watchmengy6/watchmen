@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a0b;
+  --surface: #111114;
+  --surface-2: #1a1a1f;
+  --border: #26262d;
+  --text: #f7f7fa;
+  --text-soft: #c2c2cc;
+  --text-mute: #8c8c99;
+  --gold: #e0b62a;
+  --gold-soft: #f5e08a;
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-top: env(safe-area-inset-top);
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+* {
+  -webkit-touch-callout: none;
+}
+
+input, textarea, select {
+  font-size: 16px; /* prevent iOS zoom */
+}
+
+::-webkit-scrollbar { width: 0; height: 0; }
+
+@layer components {
+  .hairline {
+    @apply border border-white/[0.06];
+  }
+  .glass {
+    background: rgba(17,17,20,0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+  .glow-gold {
+    box-shadow: 0 0 0 1px rgba(224,182,42,0.25), 0 8px 32px rgba(224,182,42,0.15);
+  }
+  .text-gradient-gold {
+    background: linear-gradient(180deg, #f5e08a 0%, #e0b62a 60%, #9f7910 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .safe-top { padding-top: max(1rem, env(safe-area-inset-top)); }
+}
