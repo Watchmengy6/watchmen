@@ -1,0 +1,100 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requireApproved } from "@/lib/auth/gates";
+import { supabaseServer } from "@/lib/supabase/server";
+import { Avatar } from "@/components/ui/Avatar";
+import { ThreadChatClient } from "./ThreadChatClient";
+
+export const dynamic = "force-dynamic";
+
+export default async function DmThreadPage({
+  params,
+}: {
+  params: { threadId: string };
+}) {
+  const { profile } = await requireApproved();
+  const supabase = supabaseServer();
+
+  const { data: thread } = await supabase
+    .from("threads")
+    .select("id, kind, title, group_id, event_id")
+    .eq("id", params.threadId)
+    .maybeSingle();
+  if (!thread) notFound();
+
+  // Members in this thread (for header + counterpart name on DMs).
+  const { data: members } = await supabase
+    .from("thread_members")
+    .select(
+      "user_id, profile:profiles!thread_members_user_id_fkey(id, full_name, profile_photo_url)",
+    )
+    .eq("thread_id", thread.id);
+
+  const others = (members ?? [])
+    .map((row: any) => (Array.isArray(row.profile) ? row.profile[0] : row.profile))
+    .filter((p: any) => p && p.id !== profile.id);
+
+  const headerTitle =
+    thread.kind === "dm"
+      ? others[0]?.full_name ?? "Brother"
+      : thread.title ?? "Conversation";
+  const headerAvatar = thread.kind === "dm" ? others[0]?.profile_photo_url ?? null : null;
+
+  // Messages — newest 100, render oldest-first.
+  const { data: messages } = await supabase
+    .from("thread_messages")
+    .select(
+      "id, body, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
+    )
+    .eq("thread_id", thread.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  const adapted = (messages ?? []).map((m: any) => {
+    const a = Array.isArray(m.author) ? m.author[0] : m.author;
+    return {
+      id: m.id,
+      body: m.body,
+      created_at: m.created_at,
+      author_id: m.author_id,
+      author_name: a?.full_name ?? "Brother",
+      author_photo: a?.profile_photo_url ?? null,
+      is_me: m.author_id === profile.id,
+    };
+  });
+
+  return (
+    <div className="min-h-[100dvh] bg-ink-900 flex flex-col -mx-4 sm:mx-0">
+      <div
+        className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
+        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+      >
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <Link
+            href="/app/dms"
+            aria-label="Back"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-ink-800 hairline text-ink-100 text-lg"
+          >
+            ‹
+          </Link>
+          <Avatar src={headerAvatar ?? undefined} name={headerTitle} size={36} />
+          <div className="flex-1 min-w-0">
+            <div className="text-white text-[15px] font-semibold truncate">{headerTitle}</div>
+            <div className="text-[11px] text-ink-400">
+              {thread.kind === "dm" ? "Private message" : thread.kind === "group" ? "Group" : "Event"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ThreadChatClient
+        threadId={thread.id}
+        initialMessages={adapted}
+        meId={profile.id}
+        meName={profile.full_name}
+        meAvatar={profile.profile_photo_url}
+      />
+    </div>
+  );
+}

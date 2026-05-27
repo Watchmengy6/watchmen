@@ -1183,3 +1183,75 @@ export const mockLedger = [
   { user_id: "p_tre", user_name: "Tre Mitchell", action_type: "message_image", points: 3, created_at: "2026-05-25T10:14:00Z" },
   { user_id: "p_jose", user_name: "Jose Ramirez", action_type: "rsvp_going", points: 5, created_at: "2026-05-22T08:11:00Z" },
 ];
+
+// ============================================================================
+// Adapters: convert mock shapes to the real component prop shapes.
+// Used by preview pages so they keep working after components became
+// real-data-driven.
+// ============================================================================
+import type { FeedPostShape, FeedPostComment } from "@/components/feed/FeedPost";
+
+export function adaptMockFeedPost(p: MockFeedPost): FeedPostShape {
+  const author = mockMembers.find((m) => m.id === p.user_id);
+  const activity = p.activity_ref
+    ? (() => {
+        if (p.activity_ref!.kind === "meetup") {
+          const m = mockMeetups.find((x) => x.id === (p.activity_ref as any).meetup_id);
+          if (!m) return null;
+          return {
+            kind: "meetup" as const,
+            data: m,
+            hostName: m.host_name,
+            hostPhoto: m.host_photo,
+            going: m.user_going,
+          };
+        }
+        if (p.activity_ref!.kind === "event") {
+          const e = mockEvents.find((x) => x.id === (p.activity_ref as any).event_id);
+          if (!e) return null;
+          return {
+            kind: "event" as const,
+            data: e,
+            hostName: "Dustin Hardy",
+            hostPhoto: null,
+            going: (e as any).user_going,
+          };
+        }
+        return null;
+      })()
+    : null;
+  const comments: FeedPostComment[] = p.comments.map((c) => ({
+    id: c.id,
+    body: c.content,
+    created_at: c.created_at,
+    user_name: c.user_name,
+    user_photo: c.user_photo,
+  }));
+  return {
+    id: p.id,
+    type: p.type,
+    body: p.content,
+    created_at: p.created_at,
+    image_url: p.image_url,
+    author: {
+      id: p.user_id,
+      full_name: p.user_name,
+      username: author?.username,
+      profile_photo_url: p.user_photo,
+      role_text: p.user_role,
+    },
+    tagged_group: p.tagged_group
+      ? {
+          id: p.tagged_group.id,
+          name: p.tagged_group.name,
+          category: p.tagged_group.category,
+          emoji: p.tagged_group.emoji,
+        }
+      : null,
+    activity,
+    likes: p.likes,
+    liked_by_me: p.liked_by_me,
+    comments,
+    preview: true,
+  };
+}

@@ -12,7 +12,7 @@ import { groupMessages } from "@/components/chat/groupMessages";
 import { FeedPost } from "@/components/feed/FeedPost";
 import { PreviewBottomNav } from "../PreviewBottomNav";
 import { cn } from "@/lib/utils/cn";
-import { mockGroups, mockMembers, mockFeed } from "@/lib/preview/mock";
+import { mockGroups, mockMembers, mockFeed, adaptMockFeedPost } from "@/lib/preview/mock";
 
 // The same messages used in /preview/group-chat, trimmed to last 3 for preview.
 const recentMessages = [
@@ -242,7 +242,7 @@ export default function PreviewGroupDetail() {
         {taggedPosts.length > 0 ? (
           <div className="space-y-3">
             {taggedPosts.map((p) => (
-              <FeedPost key={p.id} post={p} />
+              <FeedPost key={p.id} post={adaptMockFeedPost(p)} />
             ))}
           </div>
         ) : (

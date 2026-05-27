@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FeedPost } from "@/components/feed/FeedPost";
 import { Card, CardBody } from "@/components/ui/Card";
 import { PreviewBottomNav } from "../PreviewBottomNav";
-import { mockFeed } from "@/lib/preview/mock";
+import { mockFeed, adaptMockFeedPost } from "@/lib/preview/mock";
 
 export default function PreviewBoard() {
   const items = mockFeed.filter((p) => p.type === "job" || p.type === "need");
@@ -54,7 +54,7 @@ export default function PreviewBoard() {
         </div>
 
         {items.map((p) => (
-          <FeedPost key={p.id} post={p} />
+          <FeedPost key={p.id} post={adaptMockFeedPost(p)} />
         ))}
       </div>
       <PreviewBottomNav />

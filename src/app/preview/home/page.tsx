@@ -4,7 +4,15 @@ import { FeedPost } from "@/components/feed/FeedPost";
 import { AdminPill } from "@/components/admin/AdminPill";
 import { Logo } from "@/components/brand/Logo";
 import { PreviewBottomNav } from "../PreviewBottomNav";
-import { mockMe, mockFeed, mockPending, mockUpcomingEvent } from "@/lib/preview/mock";
+import {
+  mockMe,
+  mockFeed,
+  mockPending,
+  mockUpcomingEvent,
+  mockMembers,
+  mockGroups,
+  adaptMockFeedPost,
+} from "@/lib/preview/mock";
 import { fmtTime } from "@/lib/utils/date";
 
 export default function PreviewFeed() {
@@ -86,7 +94,17 @@ export default function PreviewFeed() {
         </Link>
 
         {/* Composer */}
-        <FeedComposer meName={mockMe.full_name} />
+        <FeedComposer
+          meName={mockMe.full_name}
+          mentionablePeople={mockMembers.map((m) => ({
+            id: m.id,
+            full_name: m.full_name,
+            username: m.username,
+          }))}
+          taggableGroups={mockGroups
+            .filter((g) => g.joined)
+            .map((g) => ({ id: g.id, name: g.name, emoji: g.emoji }))}
+        />
 
         {/* Filter pills */}
         <div className="flex gap-2 -mx-1 overflow-x-auto pb-1">
@@ -114,7 +132,7 @@ export default function PreviewFeed() {
         {/* Feed */}
         <div className="space-y-3">
           {mockFeed.map((post) => (
-            <FeedPost key={post.id} post={post} />
+            <FeedPost key={post.id} post={adaptMockFeedPost(post)} meName={mockMe.full_name} />
           ))}
         </div>
 

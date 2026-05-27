@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
-import { mockGroups, mockMembers } from "@/lib/preview/mock";
 
 const types = [
   { id: "post", label: "Post" },
@@ -11,15 +10,52 @@ const types = [
   { id: "need", label: "Need" },
 ] as const;
 
-export function FeedComposer({ meName }: { meName: string }) {
+export interface MentionablePerson {
+  id: string;
+  full_name: string;
+  username: string;
+}
+
+export interface TaggableGroup {
+  id: string;
+  name: string;
+  /** Optional small emoji or character to render in the chip — falls back to first letter. */
+  emoji?: string | null;
+}
+
+export interface FeedComposerProps {
+  meName: string;
+  meAvatarUrl?: string | null;
+  /** Members the user can @mention. Live-filtered against `@<query>` typed into the textarea. */
+  mentionablePeople?: MentionablePerson[];
+  /** Groups the user has joined and can tag a post to. */
+  taggableGroups?: TaggableGroup[];
+  /**
+   * Server action invoked on submit. Should accept FormData with:
+   *   - kind   ('post' | 'job' | 'need')
+   *   - body   (string)
+   *   - tagged_group_id (uuid | '')
+   * Returns void; component closes & resets on success.
+   */
+  onSubmit?: (formData: FormData) => Promise<{ error?: string } | void>;
+}
+
+export function FeedComposer({
+  meName,
+  meAvatarUrl,
+  mentionablePeople = [],
+  taggableGroups = [],
+  onSubmit,
+}: FeedComposerProps) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<(typeof types)[number]["id"]>("post");
   const [text, setText] = useState("");
   const [taggedGroupId, setTaggedGroupId] = useState<string | null>(null);
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
-  const joinedGroups = mockGroups.filter((g) => g.joined);
+  const [pending, startTransition] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
   const taggedGroup = taggedGroupId
-    ? mockGroups.find((g) => g.id === taggedGroupId)
+    ? taggableGroups.find((g) => g.id === taggedGroupId)
     : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -30,7 +66,7 @@ export function FeedComposer({ meName }: { meName: string }) {
   })();
   const mentionMatches =
     mentionQuery !== null
-      ? mockMembers
+      ? mentionablePeople
           .filter((u) =>
             u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
           )
@@ -43,10 +79,39 @@ export function FeedComposer({ meName }: { meName: string }) {
     textareaRef.current?.focus();
   }
 
+  function reset() {
+    setOpen(false);
+    setText("");
+    setTaggedGroupId(null);
+    setGroupPickerOpen(false);
+    setErr(null);
+  }
+
+  function handlePost() {
+    if (!text.trim() || pending) return;
+    if (!onSubmit) {
+      // No server action wired — just reset (preview mode).
+      reset();
+      return;
+    }
+    const fd = new FormData();
+    fd.set("kind", type);
+    fd.set("body", text.trim());
+    fd.set("tagged_group_id", taggedGroupId ?? "");
+    startTransition(async () => {
+      const result = await onSubmit(fd);
+      if (result && "error" in result && result.error) {
+        setErr(result.error);
+        return;
+      }
+      reset();
+    });
+  }
+
   return (
     <div className="rounded-2xl bg-ink-800/80 hairline p-3">
       <div className="flex items-center gap-3">
-        <Avatar name={meName} size={36} />
+        <Avatar name={meName} src={meAvatarUrl ?? undefined} size={36} />
         <button
           onClick={() => setOpen(true)}
           className="flex-1 h-10 rounded-full bg-ink-900/60 hairline px-4 text-left text-ink-400 text-[14px]"
@@ -116,7 +181,7 @@ export function FeedComposer({ meName }: { meName: string }) {
           {taggedGroup ? (
             <div className="mt-2 inline-flex items-center gap-2 h-7 pr-1 pl-1 rounded-full bg-ink-900/80 hairline">
               <span className="h-6 w-6 rounded-full bg-ink-700 flex items-center justify-center text-[13px]">
-                {taggedGroup.emoji}
+                {taggedGroup.emoji ?? taggedGroup.name[0]?.toUpperCase() ?? "?"}
               </span>
               <span className="text-[11.5px] text-ink-100">Tagged to {taggedGroup.name}</span>
               <button
@@ -129,10 +194,16 @@ export function FeedComposer({ meName }: { meName: string }) {
             </div>
           ) : null}
 
+          {err ? (
+            <div className="mt-2 text-[12px] text-red-300">{err}</div>
+          ) : null}
+
           <div className="flex items-center gap-2 mt-2">
             <button
               aria-label="Add photo"
               className="h-9 w-9 rounded-full bg-ink-900/60 hairline flex items-center justify-center text-ink-200"
+              disabled
+              title="Photo upload coming soon"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
                    strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -141,39 +212,38 @@ export function FeedComposer({ meName }: { meName: string }) {
                 <path d="m21 17-5-5-9 9" />
               </svg>
             </button>
-            <button
-              onClick={() => setGroupPickerOpen((s) => !s)}
-              aria-label="Tag a group"
-              className={cn(
-                "h-9 w-9 rounded-full hairline flex items-center justify-center transition-colors",
-                taggedGroup
-                  ? "bg-gold-500/15 text-gold-200 ring-1 ring-gold-500/40"
-                  : "bg-ink-900/60 text-ink-200",
-              )}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-                   strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M20 12 12 4H5a1 1 0 0 0-1 1v7l8 8a1 1 0 0 0 1.4 0l6.6-6.6a1 1 0 0 0 0-1.4Z" />
-                <circle cx="8.5" cy="8.5" r="1" fill="currentColor" />
-              </svg>
-            </button>
+            {taggableGroups.length > 0 ? (
+              <button
+                onClick={() => setGroupPickerOpen((s) => !s)}
+                aria-label="Tag a group"
+                className={cn(
+                  "h-9 w-9 rounded-full hairline flex items-center justify-center transition-colors",
+                  taggedGroup
+                    ? "bg-gold-500/15 text-gold-200 ring-1 ring-gold-500/40"
+                    : "bg-ink-900/60 text-ink-200",
+                )}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+                     strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M20 12 12 4H5a1 1 0 0 0-1 1v7l8 8a1 1 0 0 0 1.4 0l6.6-6.6a1 1 0 0 0 0-1.4Z" />
+                  <circle cx="8.5" cy="8.5" r="1" fill="currentColor" />
+                </svg>
+              </button>
+            ) : null}
             <div className="flex-1" />
             <button
-              onClick={() => {
-                setOpen(false);
-                setText("");
-                setTaggedGroupId(null);
-                setGroupPickerOpen(false);
-              }}
+              onClick={reset}
               className="h-9 px-3 rounded-full text-[13px] text-ink-200"
+              disabled={pending}
             >
               Cancel
             </button>
             <button
-              disabled={!text.trim()}
+              onClick={handlePost}
+              disabled={!text.trim() || pending}
               className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black disabled:opacity-40"
             >
-              Post
+              {pending ? "Posting…" : "Post"}
             </button>
           </div>
 
@@ -184,7 +254,7 @@ export function FeedComposer({ meName }: { meName: string }) {
                 Tag one of your groups
               </div>
               <div className="max-h-48 overflow-y-auto">
-                {joinedGroups.map((g) => (
+                {taggableGroups.map((g) => (
                   <button
                     key={g.id}
                     onClick={() => {
@@ -194,7 +264,7 @@ export function FeedComposer({ meName }: { meName: string }) {
                     className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.04] text-left"
                   >
                     <span className="h-7 w-7 rounded-full bg-ink-800 flex items-center justify-center text-[15px]">
-                      {g.emoji}
+                      {g.emoji ?? g.name[0]?.toUpperCase() ?? "?"}
                     </span>
                     <span className="flex-1 text-[13px] text-white">{g.name}</span>
                     {taggedGroupId === g.id ? (

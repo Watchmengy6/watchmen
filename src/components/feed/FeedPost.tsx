@@ -1,46 +1,155 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
 import { GroupCategoryTag } from "@/components/groups/GroupCategoryTag";
-import { ActivityCard } from "@/components/chat/ActivityCard";
+import { ActivityCard, type ActivityCardKind } from "@/components/chat/ActivityCard";
 import { RichText } from "@/components/feed/RichText";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
-import type { MockFeedPost } from "@/lib/preview/mock";
-import { mockMeetups, mockEvents } from "@/lib/preview/mock";
 
-export function FeedPost({ post }: { post: MockFeedPost }) {
+export interface FeedPostAuthor {
+  id: string;
+  full_name: string;
+  username?: string;
+  profile_photo_url?: string | null;
+  /** Headline shown below name. e.g. "Founder · Skyway Media" */
+  role_text?: string | null;
+}
+
+export interface FeedPostComment {
+  id: string;
+  body: string;
+  created_at: string;
+  user_name: string;
+  user_photo?: string | null;
+  user_id?: string;
+}
+
+export interface FeedPostTaggedGroup {
+  id: string;
+  name: string;
+  category?: string | null;
+  emoji?: string | null;
+}
+
+export interface FeedPostActivity {
+  kind: ActivityCardKind;
+  /** Already-resolved object from server. Shape depends on `kind`. */
+  data: any;
+  hostName?: string | null;
+  hostPhoto?: string | null;
+  going?: boolean;
+}
+
+export interface FeedPostShape {
+  id: string;
+  type: "post" | "job" | "need" | "meetup" | "event" | "announcement";
+  body: string;
+  created_at: string;
+  image_url?: string | null;
+  author: FeedPostAuthor;
+  tagged_group?: FeedPostTaggedGroup | null;
+  activity?: FeedPostActivity | null;
+  likes: number;
+  liked_by_me: boolean;
+  comments: FeedPostComment[];
+  /** Whether the viewer is allowed to see "preview"-style profile links instead of real ones. */
+  preview?: boolean;
+}
+
+export interface FeedPostProps {
+  post: FeedPostShape;
+  /** Toggle like. Should optimistically update. */
+  onToggleLike?: (postId: string, nextLiked: boolean) => Promise<{ error?: string } | void>;
+  /** Add a comment. Returns the inserted comment if successful. */
+  onAddComment?: (
+    postId: string,
+    body: string,
+  ) => Promise<{ comment?: FeedPostComment; error?: string } | void>;
+  meName?: string;
+  meAvatar?: string | null;
+}
+
+export function FeedPost({ post, onToggleLike, onAddComment, meName, meAvatar }: FeedPostProps) {
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likes, setLikes] = useState(post.likes);
+  const [comments, setComments] = useState<FeedPostComment[]>(post.comments);
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
+  const [pending, startTransition] = useTransition();
 
-  const toggleLike = () => {
-    setLiked((prev) => {
-      setLikes((c) => (prev ? c - 1 : c + 1));
-      return !prev;
+  const memberHref = post.preview
+    ? "/preview/member"
+    : `/app/members/${post.author.id}`;
+  const groupHref = post.preview
+    ? "/preview/group"
+    : post.tagged_group?.id
+      ? `/app/groups/${post.tagged_group.id}`
+      : "#";
+
+  function toggleLike() {
+    const next = !liked;
+    setLiked(next);
+    setLikes((c) => (next ? c + 1 : c - 1));
+    if (onToggleLike) {
+      startTransition(async () => {
+        const r = await onToggleLike(post.id, next);
+        if (r && "error" in r && r.error) {
+          // revert
+          setLiked(!next);
+          setLikes((c) => (next ? c - 1 : c + 1));
+        }
+      });
+    }
+  }
+
+  function submitComment() {
+    const body = draft.trim();
+    if (!body) return;
+    if (!onAddComment) {
+      setComments((cs) => [
+        ...cs,
+        {
+          id: `local-${Date.now()}`,
+          body,
+          created_at: new Date().toISOString(),
+          user_name: meName ?? "You",
+          user_photo: meAvatar ?? null,
+        },
+      ]);
+      setDraft("");
+      return;
+    }
+    startTransition(async () => {
+      const r = await onAddComment(post.id, body);
+      if (r && "comment" in r && r.comment) {
+        setComments((cs) => [...cs, r.comment!]);
+        setDraft("");
+      } else if (r && "error" in r && r.error) {
+        // surface? for now keep draft so user can retry
+      }
     });
-  };
+  }
 
   return (
     <Card className="overflow-hidden">
       <CardBody className="!px-0 !py-0">
         {/* Header — name + avatar tap to profile */}
         <div className="flex items-center gap-3 px-4 pt-4">
-          <Link href="/preview/member" className="shrink-0">
-            <Avatar src={post.user_photo} name={post.user_name} size={40} />
+          <Link href={memberHref} className="shrink-0">
+            <Avatar src={post.author.profile_photo_url ?? undefined} name={post.author.full_name} size={40} />
           </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <Link
-                href="/preview/member"
+                href={memberHref}
                 className="text-white text-[14px] font-semibold truncate hover:text-gold-200"
               >
-                {post.user_name}
+                {post.author.full_name}
               </Link>
               {post.type === "job" ? (
                 <Badge variant="gold">Hiring</Badge>
@@ -50,10 +159,12 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
                 <Badge variant="muted">Meetup</Badge>
               ) : post.type === "event" ? (
                 <Badge variant="gold">Event</Badge>
+              ) : post.type === "announcement" ? (
+                <Badge variant="gold">Announcement</Badge>
               ) : null}
             </div>
-            {post.user_role ? (
-              <div className="text-ink-400 text-[11.5px] truncate">{post.user_role}</div>
+            {post.author.role_text ? (
+              <div className="text-ink-400 text-[11.5px] truncate">{post.author.role_text}</div>
             ) : null}
           </div>
           <div className="text-[11px] text-ink-400 shrink-0">{relativeTime(post.created_at)}</div>
@@ -63,58 +174,37 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
         {post.tagged_group ? (
           <div className="px-4 pt-3">
             <Link
-              href="/preview/group"
+              href={groupHref}
               className="inline-flex items-center gap-2 h-7 pr-2.5 pl-1 rounded-full bg-ink-800 hairline text-[11.5px] text-ink-100 active:bg-ink-700 transition-colors"
             >
               <span className="h-6 w-6 rounded-full bg-ink-700 flex items-center justify-center text-[13px]">
-                {post.tagged_group.emoji}
+                {post.tagged_group.emoji ?? post.tagged_group.name[0]?.toUpperCase() ?? "?"}
               </span>
               <span className="font-medium">{post.tagged_group.name}</span>
-              <GroupCategoryTag category={post.tagged_group.category} />
+              {post.tagged_group.category ? (
+                <GroupCategoryTag category={post.tagged_group.category as any} />
+              ) : null}
             </Link>
           </div>
         ) : null}
 
         {/* Content with parsed @mentions */}
-        {post.content ? (
+        {post.body ? (
           <div className="px-4 pt-3 text-[15px] text-ink-100 leading-relaxed whitespace-pre-wrap">
-            <RichText text={post.content} />
+            <RichText text={post.body} />
           </div>
         ) : null}
 
         {/* Activity card (meetup or event) — inline RSVP */}
-        {post.activity_ref ? (
+        {post.activity ? (
           <div className="px-4 pt-3">
-            {post.activity_ref.kind === "meetup" ? (
-              (() => {
-                const m = mockMeetups.find((x) => x.id === (post.activity_ref as any).meetup_id);
-                if (!m) return null;
-                return (
-                  <ActivityCard
-                    kind="meetup"
-                    data={m}
-                    hostName={m.host_name}
-                    hostPhoto={m.host_photo}
-                    going={m.user_going}
-                  />
-                );
-              })()
-            ) : null}
-            {post.activity_ref.kind === "event" ? (
-              (() => {
-                const e = mockEvents.find((x) => x.id === (post.activity_ref as any).event_id);
-                if (!e) return null;
-                return (
-                  <ActivityCard
-                    kind="event"
-                    data={e as any}
-                    hostName="Dustin Hardy"
-                    hostPhoto={null}
-                    going={e.user_going}
-                  />
-                );
-              })()
-            ) : null}
+            <ActivityCard
+              kind={post.activity.kind}
+              data={post.activity.data}
+              hostName={post.activity.hostName ?? ""}
+              hostPhoto={post.activity.hostPhoto ?? null}
+              going={post.activity.going}
+            />
           </div>
         ) : null}
 
@@ -125,8 +215,6 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
             alt=""
             className="mt-3 w-full max-h-[420px] object-cover"
           />
-        ) : !post.activity_ref ? (
-          <div className="mt-3 h-px" />
         ) : (
           <div className="mt-3 h-px" />
         )}
@@ -135,6 +223,7 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
         <div className="flex items-center gap-1 px-2 py-2 border-t border-white/[0.04]">
           <button
             onClick={toggleLike}
+            disabled={pending}
             className={cn(
               "flex items-center gap-1.5 px-3 h-9 rounded-full text-[13px] transition-colors",
               liked ? "text-pink-300" : "text-ink-200 hover:text-white",
@@ -161,12 +250,12 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
                  strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
               <path d="M21 12c0 4.2-4 7.5-9 7.5-1.4 0-2.7-.25-3.85-.7L3 21l1.55-4.4C3.6 15.4 3 13.75 3 12 3 7.85 7 4.5 12 4.5s9 3.35 9 7.5Z" />
             </svg>
-            <span className="tabular-nums">{post.comments.length}</span>
+            <span className="tabular-nums">{comments.length}</span>
           </button>
 
           <div className="flex-1" />
 
-          <button className="px-3 h-9 rounded-full text-[13px] text-ink-200 hover:text-white transition-colors">
+          <button className="px-3 h-9 rounded-full text-[13px] text-ink-200 hover:text-white transition-colors" aria-label="Share">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
                  strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
               <path d="M4 12v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8" />
@@ -179,23 +268,23 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
         {/* Comments */}
         {showComments ? (
           <div className="px-4 pb-4 border-t border-white/[0.04] pt-3 space-y-3">
-            {post.comments.length === 0 ? (
+            {comments.length === 0 ? (
               <div className="text-ink-400 text-sm">Be the first to comment.</div>
             ) : (
-              post.comments.map((c) => (
+              comments.map((c) => (
                 <div key={c.id} className="flex items-start gap-2.5">
-                  <Link href="/preview/member" className="shrink-0">
-                    <Avatar src={c.user_photo} name={c.user_name} size={28} />
+                  <Link
+                    href={post.preview ? "/preview/member" : `/app/members/${c.user_id ?? ""}`}
+                    className="shrink-0"
+                  >
+                    <Avatar src={c.user_photo ?? undefined} name={c.user_name} size={28} />
                   </Link>
                   <div className="flex-1 min-w-0 rounded-2xl bg-ink-800 hairline px-3 py-2">
-                    <Link
-                      href="/preview/member"
-                      className="text-[12.5px] font-semibold text-white hover:text-gold-200"
-                    >
+                    <div className="text-[12.5px] font-semibold text-white">
                       {c.user_name}
-                    </Link>
+                    </div>
                     <div className="text-[14px] text-ink-100 leading-snug mt-0.5">
-                      <RichText text={c.content} />
+                      <RichText text={c.body} />
                     </div>
                     <div className="text-[10.5px] text-ink-400 mt-1">
                       {relativeTime(c.created_at)}
@@ -205,11 +294,17 @@ export function FeedPost({ post }: { post: MockFeedPost }) {
               ))
             )}
             <div className="flex items-center gap-2 pt-1">
-              <Avatar name="You" size={28} />
+              <Avatar src={meAvatar ?? undefined} name={meName ?? "You"} size={28} />
               <div className="flex-1">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      submitComment();
+                    }
+                  }}
                   placeholder="Add a comment…"
                   className="w-full h-9 rounded-full bg-ink-800 hairline px-3 text-[14px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
                 />

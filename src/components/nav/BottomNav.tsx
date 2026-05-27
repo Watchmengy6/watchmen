@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils/cn";
 const tabs = [
   { href: "/app/home", label: "Feed", Icon: HomeIcon },
   { href: "/app/chat", label: "Chat", Icon: ChatIcon },
+  { href: "/app/dms", label: "DMs", Icon: DmIcon },
   { href: "/app/events", label: "Events", Icon: EventIcon },
   { href: "/app/groups", label: "Groups", Icon: GroupsIcon },
-  { href: "/app/meetups", label: "Meetups", Icon: MeetupIcon },
-  { href: "/app/profile", label: "Profile", Icon: ProfileIcon },
+  { href: "/app/profile", label: "You", Icon: ProfileIcon },
 ];
 
 interface BottomNavProps {
@@ -113,16 +113,16 @@ function GroupsIcon({ active, className }: IconProps) {
   return MembersIcon({ active, className });
 }
 
-function MeetupIcon({ active, className }: IconProps) {
+function DmIcon({ active, className }: IconProps) {
   return active ? (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 12 7.4 12.3a1 1 0 0 0 1.2 0C13 22 20 15.4 20 10a8 8 0 0 0-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z" />
+      <path d="M22 2 11 13 2 9l20-7Zm-7 13-4 7-4-9 8 2Z" />
     </svg>
   ) : (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
          strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M20 10c0 5.4-7.6 12-7.6 12S4.8 15.4 4.8 10a7.2 7.2 0 0 1 14.4 0Z" />
-      <circle cx="12" cy="10" r="3" />
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4Z" />
     </svg>
   );
 }
