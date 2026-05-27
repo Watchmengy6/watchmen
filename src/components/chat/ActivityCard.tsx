@@ -74,16 +74,25 @@ export function ActivityCard(props: ActivityCardProps) {
   const meetup = kind === "meetup" ? data : null;
   const event = kind === "event" ? data : null;
 
+  // Meetups: preview mock uses `when_iso`, real DB uses `when_at`. Accept either.
+  const meetupWhen = (meetup as any)?.when_iso ?? (meetup as any)?.when_at;
   const whenLabel = meetup
-    ? fmtWhen(meetup.when_iso)
-    : event
+    ? meetupWhen
+      ? fmtWhen(meetupWhen)
+      : ""
+    : event && event.event_date
       ? `${new Date(event.event_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}${event.start_time ? " · " + new Date("2020-01-01T" + event.start_time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}`
       : "";
 
   const title = meetup?.title ?? event?.title ?? "";
-  const location = meetup?.location ?? event?.location_name ?? "";
-  const gradient = meetup?.gradient ?? event?.gradient ?? "from-ink-700 to-ink-900";
-  const emoji = meetup?.emoji ?? event?.emoji ?? "📅";
+  // Preview mock uses `location`, real DB uses `location_name`. Accept either.
+  const location =
+    (meetup as any)?.location ??
+    (meetup as any)?.location_name ??
+    event?.location_name ??
+    "";
+  const gradient = (meetup as any)?.gradient ?? (event as any)?.gradient ?? "from-ink-700 to-ink-900";
+  const emoji = (meetup as any)?.emoji ?? (event as any)?.emoji ?? "📅";
   // For real /app data, link to /app/meetups/[id] or /app/events/[id].
   // For preview pages, fall back to the demo routes.
   const realId = (data as any)?.id;

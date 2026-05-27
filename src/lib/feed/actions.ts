@@ -64,8 +64,12 @@ export async function createPostAction(
   if (error) return { error: error.message };
 
   // Parse @mentions out of body and write to post_mentions.
+  // Usernames are always lowercased at write time, so we lowercase the
+  // mentions before lookup to make tagging case-insensitive.
   const mentionedUsernames = Array.from(
-    new Set((body.match(/@(\w+)/g) ?? []).map((s) => s.slice(1))),
+    new Set(
+      (body.match(/@(\w+)/g) ?? []).map((s) => s.slice(1).toLowerCase()),
+    ),
   );
   if (mentionedUsernames.length > 0) {
     const { data: mentioned } = await supabase
@@ -111,8 +115,8 @@ export async function toggleLikeAction(
     const { error } = await supabase
       .from("post_likes")
       .insert({ post_id: postId, user_id: me.id });
-    // Ignore unique-violation: already liked.
-    if (error && !error.message.includes("duplicate")) return { error: error.message };
+    // Ignore unique-violation (Postgres error code 23505): already liked.
+    if (error && (error as any).code !== "23505") return { error: error.message };
   } else {
     const { error } = await supabase
       .from("post_likes")
