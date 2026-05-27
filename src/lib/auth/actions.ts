@@ -64,30 +64,23 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   if (error) return { error: error.message };
 
   // Fire-and-forget: notify admins that someone is waiting for approval.
-  // Email is best-effort — never block the signup flow.
+  // Best-effort — never block the signup flow.
   try {
-    // Use the anon-client we already have; admin emails are visible to
-    // admins via RLS, but for the notification we just need addresses.
-    // We use a fresh server client to query admins by auth email.
-    const { data: admins } = await supabase
-      .from("profiles")
-      .select("auth_user_id")
-      .in("role", ["admin", "super_admin"])
-      .eq("status", "approved");
-
-    if (admins && admins.length > 0) {
-      // Pull emails for those auth_user_ids via the admin endpoint we
-      // can't reach from anon — fall back to reading the contact email
-      // off the profile if present. For now, ship the notification to a
-      // single configured admin email if RESEND_ADMIN_NOTIFY_TO is set.
-      const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
-      if (adminInbox) {
+    const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
+    if (adminInbox) {
+      const adminEmails = adminInbox
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (adminEmails.length > 0) {
         await notifyAdminNewSignup({
-          adminEmails: adminInbox.split(",").map((s) => s.trim()).filter(Boolean),
+          adminEmails,
           newMemberName: full_name,
           newMemberEmail: email,
         });
       }
+    } else {
+      console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin notify skipped");
     }
   } catch (e) {
     console.warn("[signup] admin notify failed (non-fatal)", e);
