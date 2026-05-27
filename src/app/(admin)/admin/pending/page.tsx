@@ -8,16 +8,40 @@ export const dynamic = "force-dynamic";
 
 export default async function PendingPage() {
   const supabase = supabaseServer();
-  const { data: pending } = await supabase
+  // Note: we used to embed `inviter:profiles!...fkey(...)` here, but the
+  // self-referencing embed silently errors against PostgREST in some
+  // setups, which made the whole query return null and the admin saw
+  // "no pending approvals" even when 3 were pending. Now we fetch
+  // pending profiles flat, then look up inviter names in a second pass.
+  const { data: pending, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, profile_photo_url, occupation, company, bio, instagram_url, interests, invited_by_user_id, created_at, inviter:profiles!profiles_invited_by_user_id_fkey(id, full_name)",
+      "id, full_name, email, phone, profile_photo_url, occupation, company, bio, instagram_url, interests, invited_by_user_id, created_at",
     )
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
+  if (error) {
+    console.error("[admin/pending] query failed", error);
+  }
+
   if (!pending || pending.length === 0) {
     return <EmptyState title="No pending approvals" body="You're all caught up." />;
+  }
+
+  // Resolve inviter names in one batched lookup.
+  const inviterIds = Array.from(
+    new Set(
+      pending.map((p) => p.invited_by_user_id).filter((id): id is string => !!id),
+    ),
+  );
+  const inviterMap = new Map<string, string>();
+  if (inviterIds.length > 0) {
+    const { data: inviters } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", inviterIds);
+    inviters?.forEach((i) => inviterMap.set(i.id, i.full_name));
   }
 
   return (
@@ -33,7 +57,9 @@ export default async function PendingPage() {
                 <div className="text-ink-400 text-xs mt-0.5">
                   Invited by:{" "}
                   <span className="text-ink-200">
-                    {p.inviter?.full_name ?? "— direct signup"}
+                    {p.invited_by_user_id
+                      ? inviterMap.get(p.invited_by_user_id) ?? "— unknown"
+                      : "— direct signup"}
                   </span>
                 </div>
               </div>
