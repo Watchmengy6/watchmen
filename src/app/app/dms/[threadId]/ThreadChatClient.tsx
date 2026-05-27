@@ -4,10 +4,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { sendThreadMessageAction } from "@/lib/dms/actions";
 import { createBrowserClient } from "@supabase/ssr";
+import { uploadMedia } from "@/lib/uploads/client";
 
 interface Msg {
   id: string;
   body: string;
+  media_url?: string | null;
+  media_type?: "none" | "image" | "video";
   created_at: string;
   author_id: string;
   author_name: string;
@@ -33,7 +36,10 @@ export function ThreadChatClient({
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive.
   useEffect(() => {
@@ -114,6 +120,44 @@ export function ThreadChatClient({
     });
   }
 
+  async function pickAndSendMedia(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setErr(null);
+    const result = await uploadMedia(file);
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+    if ("error" in result) {
+      setErr(result.error);
+      return;
+    }
+    // Send a message with just the media URL.
+    const localId = `local-${Date.now()}`;
+    const isImage = result.mediaType === "image";
+    const placeholder = isImage ? "[image]" : "[video]";
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: localId,
+        body: placeholder,
+        created_at: new Date().toISOString(),
+        author_id: meId,
+        author_name: meName,
+        author_photo: meAvatar ?? null,
+        is_me: true,
+      },
+    ]);
+    const fd = new FormData();
+    fd.set("thread_id", threadId);
+    fd.set("body", placeholder);
+    fd.set("media_url", result.url);
+    fd.set("media_type", result.mediaType);
+    startTransition(async () => {
+      await sendThreadMessageAction(fd);
+    });
+  }
+
   return (
     <>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
@@ -132,14 +176,29 @@ export function ThreadChatClient({
                 ) : !m.is_me ? (
                   <div className="w-7" />
                 ) : null}
-                <div
-                  className={
-                    m.is_me
-                      ? "max-w-[78%] rounded-2xl rounded-br-md bg-gold-400 text-black px-3.5 py-2 text-[15px] leading-snug"
-                      : "max-w-[78%] rounded-2xl rounded-bl-md bg-ink-800 hairline text-ink-100 px-3.5 py-2 text-[15px] leading-snug"
-                  }
-                >
-                  {m.body}
+                <div className="max-w-[78%]">
+                  {m.media_url && m.media_type === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.media_url}
+                      alt=""
+                      className="rounded-2xl max-h-72 object-cover"
+                    />
+                  ) : null}
+                  {m.media_url && m.media_type === "video" ? (
+                    <video src={m.media_url} controls className="rounded-2xl max-h-72" />
+                  ) : null}
+                  {m.body && !(m.body === "[image]" || m.body === "[video]") ? (
+                    <div
+                      className={
+                        m.is_me
+                          ? "rounded-2xl rounded-br-md bg-gold-400 text-black px-3.5 py-2 text-[15px] leading-snug mt-1"
+                          : "rounded-2xl rounded-bl-md bg-ink-800 hairline text-ink-100 px-3.5 py-2 text-[15px] leading-snug mt-1"
+                      }
+                    >
+                      {m.body}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );
@@ -148,10 +207,40 @@ export function ThreadChatClient({
       </div>
 
       <div
-        className="sticky bottom-0 left-0 right-0 bg-ink-900/95 backdrop-blur-xl border-t border-white/[0.05] px-3 py-2"
+        className="sticky bottom-0 left-0 right-0 bg-ink-900/95 backdrop-blur-xl border-t border-white/[0.05] px-3 pt-2"
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
+        {err ? (
+          <div className="text-[12px] text-red-300 pb-1">{err}</div>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={pickAndSendMedia}
+        />
         <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            aria-label="Send photo or video"
+            className="h-9 w-9 shrink-0 rounded-full bg-ink-800 hairline text-ink-200 flex items-center justify-center"
+          >
+            {uploading ? (
+              <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="9" strokeDasharray="40 60" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+                   strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <circle cx="9" cy="11" r="2" />
+                <path d="m21 17-5-5-9 9" />
+              </svg>
+            )}
+          </button>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -168,7 +257,7 @@ export function ThreadChatClient({
           <button
             onClick={send}
             disabled={!text.trim() || pending}
-            className="h-9 w-9 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black flex items-center justify-center disabled:opacity-40"
+            className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black flex items-center justify-center disabled:opacity-40"
             aria-label="Send"
           >
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">

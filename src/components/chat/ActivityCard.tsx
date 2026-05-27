@@ -84,7 +84,18 @@ export function ActivityCard(props: ActivityCardProps) {
   const location = meetup?.location ?? event?.location_name ?? "";
   const gradient = meetup?.gradient ?? event?.gradient ?? "from-ink-700 to-ink-900";
   const emoji = meetup?.emoji ?? event?.emoji ?? "📅";
-  const href = kind === "meetup" ? "/preview/meetup" : "/preview/event";
+  // For real /app data, link to /app/meetups/[id] or /app/events/[id].
+  // For preview pages, fall back to the demo routes.
+  const realId = (data as any)?.id;
+  const href = (props as any).href
+    ? (props as any).href
+    : realId
+      ? kind === "meetup"
+        ? `/app/meetups/${realId}`
+        : `/app/events/${realId}`
+      : kind === "meetup"
+        ? "/preview/meetup"
+        : "/preview/event";
 
   return (
     <Link href={href}>

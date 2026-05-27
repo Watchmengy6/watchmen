@@ -38,7 +38,7 @@ export default function PreviewFeed() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin ? <AdminPill pendingCount={pendingCount} /> : null}
+            {isAdmin ? <AdminPill pendingCount={pendingCount} href="/preview/admin" /> : null}
             <Link
               href="/preview/members"
               aria-label="Search members"

@@ -5,10 +5,16 @@ import Link from "next/link";
  * Same footprint as the bell/search round icons next to it, with a small
  * black badge for the pending-approval count. Only render for admin roles.
  */
-export function AdminPill({ pendingCount = 0 }: { pendingCount?: number }) {
+export function AdminPill({
+  pendingCount = 0,
+  href = "/admin/pending",
+}: {
+  pendingCount?: number;
+  href?: string;
+}) {
   return (
     <Link
-      href="/preview/admin"
+      href={href}
       aria-label={`Admin${pendingCount > 0 ? ` · ${pendingCount} pending` : ""}`}
       className="relative h-9 w-9 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black flex items-center justify-center shadow-glow"
     >

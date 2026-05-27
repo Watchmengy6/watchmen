@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
+import { awardPoints } from "@/lib/points/award";
 
 const CATEGORIES = ["Coffee", "Workout", "Drinks", "Outdoors", "Food", "Other"] as const;
 
@@ -58,6 +59,8 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
     .from("meetup_rsvps")
     .insert({ meetup_id: m.id, user_id: me.id, going: true });
 
+  await awardPoints({ userId: me.id, action: "meetup_created", meta: { meetup_id: m.id } });
+
   revalidatePath("/app/meetups");
   redirect(`/app/meetups/${m.id}`);
 }
@@ -77,12 +80,26 @@ export async function rsvpMeetupAction(formData: FormData) {
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me) return;
+  // Detect if this is a new "going" RSVP so we only award points once.
+  const { data: existing } = await supabase
+    .from("meetup_rsvps")
+    .select("going")
+    .eq("meetup_id", meetupId)
+    .eq("user_id", me.id)
+    .maybeSingle();
+  const isNewYes = going && (!existing || !existing.going);
+
   await supabase
     .from("meetup_rsvps")
     .upsert(
       { meetup_id: meetupId, user_id: me.id, going },
       { onConflict: "meetup_id,user_id" },
     );
+
+  if (isNewYes) {
+    await awardPoints({ userId: me.id, action: "meetup_rsvp", meta: { meetup_id: meetupId } });
+  }
+
   revalidatePath(`/app/meetups/${meetupId}`);
   revalidatePath("/app/meetups");
 }

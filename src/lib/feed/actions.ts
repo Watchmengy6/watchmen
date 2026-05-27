@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
+import { awardPoints } from "@/lib/points/award";
 
 /**
  * Create a feed post. Called from the FeedComposer client component
@@ -39,6 +40,11 @@ export async function createPostAction(
   const taggedGroupId = String(formData.get("tagged_group_id") ?? "").trim() || null;
   const taggedEventId = String(formData.get("tagged_event_id") ?? "").trim() || null;
   const taggedMeetupId = String(formData.get("tagged_meetup_id") ?? "").trim() || null;
+  const mediaUrl = String(formData.get("media_url") ?? "").trim() || null;
+  const mediaTypeRaw = String(formData.get("media_type") ?? "none").trim();
+  const mediaType = (["none", "image", "video"].includes(mediaTypeRaw)
+    ? mediaTypeRaw
+    : "none") as "none" | "image" | "video";
 
   const { data: post, error } = await supabase
     .from("posts")
@@ -49,6 +55,8 @@ export async function createPostAction(
       tagged_group_id: taggedGroupId,
       tagged_event_id: taggedEventId,
       tagged_meetup_id: taggedMeetupId,
+      media_url: mediaUrl,
+      media_type: mediaType,
     })
     .select("id")
     .single();
@@ -73,6 +81,9 @@ export async function createPostAction(
       );
     }
   }
+
+  // Award points for the post (fire-and-forget).
+  await awardPoints({ userId: me.id, action: "post_created", meta: { post_id: post.id, kind } });
 
   revalidatePath("/app/home");
   return { postId: post.id };
@@ -151,6 +162,8 @@ export async function addCommentAction(
     .select("id, body, created_at")
     .single();
   if (error) return { error: error.message };
+
+  await awardPoints({ userId: me.id, action: "comment_added", meta: { post_id: postId, comment_id: row.id } });
 
   revalidatePath("/app/home");
   return {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/Button";
+import { Logo } from "@/components/brand/Logo";
 
 export default async function Landing() {
   const supabase = supabaseServer();
@@ -22,13 +23,19 @@ export default async function Landing() {
   return (
     <main className="min-h-[100dvh] flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+        <div className="mb-6">
+          <Logo className="h-24 w-24 text-gold-400" />
+        </div>
         <div className="mb-2 text-[11px] tracking-[0.3em] uppercase text-gold-300/80">
           Private Network · Members Only
         </div>
         <h1 className="text-5xl font-semibold tracking-tight">
-          <span className="text-gradient-gold">The Watchman</span>
+          <span className="text-gradient-gold">The Watchmen</span>
         </h1>
-        <p className="mt-4 max-w-sm text-ink-200 text-[15px] leading-relaxed">
+        <div className="mt-3 text-[11px] tracking-[0.32em] uppercase text-gold-300/90">
+          Got Your 6
+        </div>
+        <p className="mt-5 max-w-sm text-ink-200 text-[15px] leading-relaxed">
           A private room for the brothers who actually show up. Networking,
           events, and brotherhood — by invitation only.
         </p>

@@ -25,7 +25,15 @@ export async function sendThreadMessageAction(
 ): Promise<{ error?: string }> {
   const threadId = String(formData.get("thread_id") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  if (!threadId || !body) return { error: "Missing fields." };
+  const mediaUrl = String(formData.get("media_url") ?? "").trim() || null;
+  const mediaTypeRaw = String(formData.get("media_type") ?? "none").trim();
+  const mediaType = (["none", "image", "video"].includes(mediaTypeRaw)
+    ? mediaTypeRaw
+    : "none") as "none" | "image" | "video";
+
+  if (!threadId) return { error: "Missing thread." };
+  if (!body && !mediaUrl) return { error: "Empty message." };
+
   const supabase = supabaseServer();
   const {
     data: { user },
@@ -41,6 +49,8 @@ export async function sendThreadMessageAction(
     thread_id: threadId,
     author_id: me.id,
     body,
+    media_url: mediaUrl,
+    media_type: mediaType,
   });
   if (error) return { error: error.message };
   revalidatePath(`/app/dms/${threadId}`);

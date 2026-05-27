@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
+import { uploadMedia } from "@/lib/uploads/client";
 
 const types = [
   { id: "post", label: "Post" },
@@ -54,10 +56,15 @@ export function FeedComposer({
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const router = useRouter();
   const taggedGroup = taggedGroupId
     ? taggableGroups.find((g) => g.id === taggedGroupId)
     : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // @ mention picker: opens when user types "@" and shows live-filtered members
   const mentionQuery = (() => {
@@ -85,6 +92,25 @@ export function FeedComposer({
     setTaggedGroupId(null);
     setGroupPickerOpen(false);
     setErr(null);
+    setMediaUrl(null);
+    setMediaType(null);
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setErr(null);
+    const result = await uploadMedia(file);
+    setUploading(false);
+    if ("error" in result) {
+      setErr(result.error);
+      return;
+    }
+    setMediaUrl(result.url);
+    setMediaType(result.mediaType);
+    // Reset input so the same file can be picked again later.
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function handlePost() {
@@ -98,6 +124,8 @@ export function FeedComposer({
     fd.set("kind", type);
     fd.set("body", text.trim());
     fd.set("tagged_group_id", taggedGroupId ?? "");
+    fd.set("media_url", mediaUrl ?? "");
+    fd.set("media_type", mediaType ?? "none");
     startTransition(async () => {
       const result = await onSubmit(fd);
       if (result && "error" in result && result.error) {
@@ -105,6 +133,7 @@ export function FeedComposer({
         return;
       }
       reset();
+      router.refresh();
     });
   }
 
@@ -198,19 +227,68 @@ export function FeedComposer({
             <div className="mt-2 text-[12px] text-red-300">{err}</div>
           ) : null}
 
+          {/* Media preview */}
+          {mediaUrl ? (
+            <div className="mt-2 relative">
+              {mediaType === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={mediaUrl}
+                  alt=""
+                  className="w-full max-h-72 rounded-xl object-cover"
+                />
+              ) : (
+                <video
+                  src={mediaUrl}
+                  className="w-full max-h-72 rounded-xl"
+                  controls
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaUrl(null);
+                  setMediaType(null);
+                }}
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/70 text-white text-sm"
+                aria-label="Remove media"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,video/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
           <div className="flex items-center gap-2 mt-2">
             <button
-              aria-label="Add photo"
-              className="h-9 w-9 rounded-full bg-ink-900/60 hairline flex items-center justify-center text-ink-200"
-              disabled
-              title="Photo upload coming soon"
+              type="button"
+              aria-label="Add photo or video"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className={cn(
+                "h-9 w-9 rounded-full bg-ink-900/60 hairline flex items-center justify-center transition-colors",
+                uploading ? "text-gold-300" : "text-ink-200",
+              )}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-                   strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <rect x="3" y="5" width="18" height="14" rx="2" />
-                <circle cx="9" cy="11" r="2" />
-                <path d="m21 17-5-5-9 9" />
-              </svg>
+              {uploading ? (
+                <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" strokeDasharray="40 60" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+                     strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <circle cx="9" cy="11" r="2" />
+                  <path d="m21 17-5-5-9 9" />
+                </svg>
+              )}
             </button>
             {taggableGroups.length > 0 ? (
               <button

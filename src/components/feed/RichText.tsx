@@ -28,9 +28,11 @@ export function RichText({ text }: { text: string }) {
 }
 
 function Mention({ handle }: { handle: string }) {
+  // handle includes leading "@"; strip for the URL search param.
+  const username = handle.replace(/^@/, "");
   return (
     <Link
-      href="/preview/member"
+      href={`/app/members?u=${encodeURIComponent(username)}`}
       className="text-gold-300 font-semibold hover:text-gold-200"
     >
       {handle}

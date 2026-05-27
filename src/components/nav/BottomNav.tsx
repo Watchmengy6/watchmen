@@ -22,6 +22,15 @@ interface BottomNavProps {
 
 export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavProps) {
   const pathname = usePathname();
+
+  // Hide on full-screen chat threads so the message input isn't covered.
+  const HIDE_ON = [
+    /^\/app\/dms\/[^/]+$/,
+    /^\/app\/groups\/[^/]+\/chat$/,
+    /^\/app\/events\/[^/]+\/chat$/,
+  ];
+  if (HIDE_ON.some((re) => re.test(pathname))) return null;
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 bg-ink-900/70 backdrop-blur-xl border-t border-white/[0.05]"

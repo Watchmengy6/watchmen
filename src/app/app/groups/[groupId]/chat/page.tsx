@@ -40,7 +40,7 @@ export default async function GroupChatPage({
   const { data: messages } = await supabase
     .from("thread_messages")
     .select(
-      "id, body, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
+      "id, body, media_url, media_type, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
     )
     .eq("thread_id", thread.id)
     .is("deleted_at", null)
@@ -51,7 +51,9 @@ export default async function GroupChatPage({
     const a = Array.isArray(m.author) ? m.author[0] : m.author;
     return {
       id: m.id,
-      body: m.body,
+      body: m.body ?? "",
+      media_url: m.media_url ?? null,
+      media_type: (m.media_type ?? "none") as "none" | "image" | "video",
       created_at: m.created_at,
       author_id: m.author_id,
       author_name: a?.full_name ?? "Brother",
