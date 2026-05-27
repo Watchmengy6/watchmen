@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 
 const tabs = [
@@ -22,6 +23,23 @@ interface BottomNavProps {
 
 export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavProps) {
   const pathname = usePathname() ?? "";
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // Detect on-screen keyboard via visualViewport. On iOS Safari/PWA, the visual
+  // viewport shrinks when the keyboard opens; we hide the nav so the focused
+  // input + send button remain accessible right above the keyboard.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    function onResize() {
+      // Keyboard is "open" when visual viewport height is meaningfully smaller.
+      const hidden = vv!.height < window.innerHeight - 100;
+      setKeyboardOpen(hidden);
+    }
+    vv.addEventListener("resize", onResize);
+    onResize();
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
 
   // Hide on full-screen chat threads so the message input isn't covered.
   const HIDE_ON = [
@@ -30,6 +48,7 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
     /^\/app\/events\/[^/]+\/chat$/,
   ];
   if (pathname && HIDE_ON.some((re) => re.test(pathname))) return null;
+  if (keyboardOpen) return null;
 
   return (
     <nav

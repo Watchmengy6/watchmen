@@ -70,12 +70,15 @@ export default async function MainChatPage() {
   }));
 
   return (
-    <div className="relative">
-      <div className="fixed top-0 left-0 right-0 z-30 glass border-b border-white/[0.06]">
-        <div className="mx-auto max-w-screen-sm flex items-center justify-between px-4 py-2 safe-top">
+    <div className="relative -mx-4 sm:mx-0">
+      <div
+        className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
+        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+      >
+        <div className="flex items-center justify-between px-4 py-2.5">
           <div>
-            <div className="text-[10.5px] tracking-[0.25em] uppercase text-ink-300">Main Room</div>
-            <div className="text-white text-[15px] font-semibold">The Watchman</div>
+            <div className="text-[10px] tracking-[0.3em] uppercase text-gold-300/80">Main Room</div>
+            <div className="text-white text-[18px] font-semibold leading-tight">The Watchmen</div>
           </div>
           <div className="text-[11px] text-ink-400">{(messages ?? []).length} messages</div>
         </div>

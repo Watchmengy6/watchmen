@@ -295,7 +295,7 @@ export function FeedPost({ post, onToggleLike, onAddComment, meName, meAvatar }:
             )}
             <div className="flex items-center gap-2 pt-1">
               <Avatar src={meAvatar ?? undefined} name={meName ?? "You"} size={28} />
-              <div className="flex-1">
+              <div className="flex-1 flex items-center gap-2">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -306,8 +306,19 @@ export function FeedPost({ post, onToggleLike, onAddComment, meName, meAvatar }:
                     }
                   }}
                   placeholder="Add a comment…"
-                  className="w-full h-9 rounded-full bg-ink-800 hairline px-3 text-[14px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
+                  className="flex-1 h-9 rounded-full bg-ink-800 hairline px-3 text-[14px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
                 />
+                <button
+                  type="button"
+                  onClick={submitComment}
+                  disabled={!draft.trim() || pending}
+                  className="h-9 w-9 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black flex items-center justify-center disabled:opacity-40 shrink-0"
+                  aria-label="Send comment"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                    <path d="M2 21 23 12 2 3l5 9-5 9Z" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>

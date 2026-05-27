@@ -53,25 +53,34 @@ export default async function EventsPage() {
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   return (
-    <div className="pt-8 px-5 pb-2 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+    <div
+      className="px-5 pb-2 space-y-4"
+      style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">Events</div>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight">Upcoming Watchman Events</h1>
+          <h1 className="mt-2 text-[24px] font-semibold tracking-tight leading-tight">
+            Upcoming Watchmen Events
+          </h1>
         </div>
         {isAdmin ? (
           <a
             href="/admin/events"
-            className="text-[11px] tracking-wider uppercase text-gold-300 px-3 h-8 rounded-full bg-ink-800 hairline inline-flex items-center"
+            className="shrink-0 h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black inline-flex items-center gap-1.5"
           >
-            Create
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                 strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            New
           </a>
         ) : null}
       </div>
 
       <section className="space-y-3">
         {(upcomingRes.data ?? []).length === 0 ? (
-          <EmptyState title="No upcoming events" body="Dustin will post the next one soon." />
+          <EmptyState title="No upcoming events" body="An admin will post the next one soon." />
         ) : (
           (upcomingRes.data ?? []).map((e) => (
             <EventCard

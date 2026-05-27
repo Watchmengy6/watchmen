@@ -66,17 +66,36 @@ export default async function GroupDetail({
 
       <div className="px-4 pt-4 space-y-4">
         {/* Hero */}
-        <div className="rounded-2xl bg-gradient-to-br from-gold-500/20 via-gold-700/10 to-transparent ring-1 ring-gold-500/30 p-5">
-          <div className="h-14 w-14 rounded-xl bg-ink-900/60 ring-1 ring-gold-500/30 flex items-center justify-center text-[28px]">
-            {group.name[0]?.toUpperCase()}
+        {group.cover_url ? (
+          <div className="rounded-2xl overflow-hidden ring-1 ring-gold-500/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={group.cover_url}
+              alt=""
+              className="w-full h-44 object-cover"
+            />
+            <div className="bg-gradient-to-br from-gold-500/15 via-gold-700/5 to-transparent p-5">
+              <div className="text-white text-[20px] font-semibold">{group.name}</div>
+              {group.description ? (
+                <p className="text-ink-200 text-[14px] mt-1.5 leading-relaxed">
+                  {group.description}
+                </p>
+              ) : null}
+            </div>
           </div>
-          <div className="text-white text-[20px] font-semibold mt-3">{group.name}</div>
-          {group.description ? (
-            <p className="text-ink-200 text-[14px] mt-1.5 leading-relaxed">
-              {group.description}
-            </p>
-          ) : null}
-        </div>
+        ) : (
+          <div className="rounded-2xl bg-gradient-to-br from-gold-500/20 via-gold-700/10 to-transparent ring-1 ring-gold-500/30 p-5">
+            <div className="h-14 w-14 rounded-xl bg-ink-900/60 ring-1 ring-gold-500/30 flex items-center justify-center text-[28px]">
+              {group.name[0]?.toUpperCase()}
+            </div>
+            <div className="text-white text-[20px] font-semibold mt-3">{group.name}</div>
+            {group.description ? (
+              <p className="text-ink-200 text-[14px] mt-1.5 leading-relaxed">
+                {group.description}
+              </p>
+            ) : null}
+          </div>
+        )}
 
         {/* CTA — chat or join */}
         {iAmMember ? (

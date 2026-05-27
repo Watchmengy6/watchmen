@@ -30,6 +30,7 @@ export async function createGroupAction(formData: FormData): Promise<void> {
   const category = (CATEGORIES as readonly string[]).includes(categoryRaw)
     ? categoryRaw
     : "other";
+  const coverUrl = String(formData.get("cover_url") ?? "").trim() || null;
   if (!name) return;
 
   const supabase = supabaseServer();
@@ -72,6 +73,7 @@ export async function createGroupAction(formData: FormData): Promise<void> {
       slug,
       description,
       category,
+      cover_url: coverUrl,
       created_by: me.id,
     })
     .select("id")
