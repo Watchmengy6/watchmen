@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { SwipeableRow } from "@/components/ui/SwipeableRow";
 import { PreviewBottomNav } from "../PreviewBottomNav";
@@ -18,7 +18,17 @@ import { cn } from "@/lib/utils/cn";
 
 type Tab = "private" | "groups" | "events";
 
-export default function PreviewDms() {
+// Wrap the part that calls useSearchParams() in a Suspense boundary so
+// Next.js can statically prerender this page (avoids CSR bailout warning).
+export default function PreviewDmsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[100dvh] bg-ink-900" />}>
+      <PreviewDms />
+    </Suspense>
+  );
+}
+
+function PreviewDms() {
   const search = useSearchParams();
   const router = useRouter();
   const initial = ((): Tab => {
