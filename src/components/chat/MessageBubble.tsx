@@ -1,10 +1,11 @@
 "use client";
 
 import { Avatar } from "@/components/ui/Avatar";
-import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 import { toggleReactionAction } from "@/lib/chat/actions";
 import { useTransition } from "react";
+
+export type GroupPosition = "first" | "middle" | "last" | "only";
 
 export interface MessageRow {
   id: string;
@@ -20,73 +21,126 @@ export interface MessageRow {
   reactions?: { reaction_type: string; user_id: string }[];
 }
 
+interface Props {
+  message: MessageRow;
+  mine: boolean;
+  groupPosition?: GroupPosition;
+  showName?: boolean;
+}
+
+/**
+ * iMessage-style bubble:
+ * - Single message: all corners ~20px
+ * - First in group: tail-side bottom corner tightened to ~6px
+ * - Middle: tail-side top and bottom corners tightened
+ * - Last: tail-side top corner tightened (the visual "tail" of the stack)
+ */
+function bubbleRadius(mine: boolean, pos: GroupPosition) {
+  if (mine) {
+    if (pos === "first") return "rounded-[20px] rounded-br-[6px]";
+    if (pos === "middle") return "rounded-[20px] rounded-tr-[6px] rounded-br-[6px]";
+    if (pos === "last") return "rounded-[20px] rounded-tr-[6px]";
+    return "rounded-[20px]";
+  }
+  if (pos === "first") return "rounded-[20px] rounded-bl-[6px]";
+  if (pos === "middle") return "rounded-[20px] rounded-tl-[6px] rounded-bl-[6px]";
+  if (pos === "last") return "rounded-[20px] rounded-tl-[6px]";
+  return "rounded-[20px]";
+}
+
 export function MessageBubble({
   message,
   mine,
-}: {
-  message: MessageRow;
-  mine: boolean;
-}) {
+  groupPosition = "only",
+  showName = false,
+}: Props) {
   const [, start] = useTransition();
-  const likeCount = (message.reactions ?? []).filter((r) => r.reaction_type === "like").length;
+  const showAvatar = !mine && (groupPosition === "only" || groupPosition === "last");
+  const tightSpacing = groupPosition === "first" || groupPosition === "middle";
+
+  const likeReactions = (message.reactions ?? []).filter((r) => r.reaction_type === "like");
+  const reactedByMe = likeReactions.some((r) => r.user_id === message.user_id); // placeholder
 
   const onLike = () => start(() => void toggleReactionAction({ message_id: message.id }));
 
   return (
-    <div className={cn("flex gap-2.5 px-3 py-1.5", mine && "flex-row-reverse")}>
+    <div
+      className={cn(
+        "flex gap-2 px-3",
+        mine && "flex-row-reverse",
+        tightSpacing ? "mt-[2px]" : "mt-1.5",
+      )}
+    >
       {!mine ? (
-        <div className="pt-0.5">
-          <Avatar
-            src={message.author?.profile_photo_url ?? null}
-            name={message.author?.full_name}
-            size={32}
-          />
+        <div className="w-7 shrink-0 flex items-end">
+          {showAvatar ? (
+            <Avatar
+              src={message.author?.profile_photo_url ?? null}
+              name={message.author?.full_name}
+              size={28}
+            />
+          ) : null}
         </div>
       ) : null}
-      <div className={cn("max-w-[78%]", mine ? "items-end" : "items-start", "flex flex-col")}>
-        {!mine && message.author ? (
-          <div className="text-[11px] text-ink-400 mb-0.5 px-1">
+
+      <div className={cn("max-w-[76%] flex flex-col", mine ? "items-end" : "items-start")}>
+        {showName && !mine && message.author ? (
+          <div className="text-[11px] text-ink-400 mb-1 ml-3">
             {message.author.full_name}
           </div>
         ) : null}
-        <div
-          className={cn(
-            "rounded-2xl px-3 py-2 text-[15px] leading-snug shadow-card",
-            mine ? "bg-gradient-to-b from-gold-400 to-gold-500 text-black" : "bg-ink-700 text-white",
-          )}
+
+        <button
+          onDoubleClick={onLike}
+          className={cn("relative group/bubble text-left", mine ? "ml-auto" : "mr-auto")}
         >
-          {message.media_type === "image" && message.media_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={message.media_url}
-              alt=""
-              className="rounded-xl mb-1 max-h-72 object-cover"
-            />
-          ) : null}
-          {message.media_type === "video" && message.media_url ? (
-            <video
-              src={message.media_url}
-              controls
-              playsInline
-              className="rounded-xl mb-1 max-h-72"
-            />
-          ) : null}
-          {message.content ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : null}
-        </div>
-        <div className={cn("flex items-center gap-2 mt-0.5 px-1", mine && "flex-row-reverse")}>
-          <span className="text-[10.5px] text-ink-400">{relativeTime(message.created_at)}</span>
-          <button
-            onClick={onLike}
+          <div
             className={cn(
-              "text-[11px] inline-flex items-center gap-1 px-2 h-5 rounded-full transition-colors",
-              likeCount > 0
-                ? "bg-gold-500/15 text-gold-200 ring-1 ring-gold-500/30"
-                : "bg-ink-800 hairline text-ink-300 hover:text-ink-100",
+              "px-3 py-2 text-[15px] leading-[1.25] shadow-sm",
+              bubbleRadius(mine, groupPosition),
+              mine
+                ? "bg-gradient-to-b from-gold-300 to-gold-500 text-black"
+                : "bg-ink-700 text-white",
             )}
           >
-            ♡ {likeCount > 0 ? likeCount : ""}
-          </button>
-        </div>
+            {message.media_type === "image" && message.media_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={message.media_url}
+                alt=""
+                className="rounded-2xl mb-1 max-h-72 object-cover"
+              />
+            ) : null}
+            {message.media_type === "video" && message.media_url ? (
+              <video
+                src={message.media_url}
+                controls
+                playsInline
+                className="rounded-2xl mb-1 max-h-72"
+              />
+            ) : null}
+            {message.content ? (
+              <div className="whitespace-pre-wrap break-words">{message.content}</div>
+            ) : null}
+          </div>
+
+          {likeReactions.length > 0 ? (
+            <div
+              className={cn(
+                "absolute -top-3 z-10 inline-flex items-center gap-0.5 px-1.5 h-5 rounded-full bg-ink-800 ring-1 ring-white/[0.08] shadow-sm",
+                mine ? "-left-2" : "-right-2",
+                reactedByMe ? "ring-gold-500/40" : "",
+              )}
+            >
+              <span className="text-[11px] text-pink-400">♥</span>
+              {likeReactions.length > 1 ? (
+                <span className="text-[10px] text-ink-100 tabular-nums">
+                  {likeReactions.length}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </button>
       </div>
     </div>
   );

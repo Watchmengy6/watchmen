@@ -3,17 +3,21 @@ import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
-  title: "The Watchman",
-  description: "A private network for the Watchman brotherhood.",
+  title: "The Watchmen · Got Your 6",
+  description: "A private network for the Watchmen brotherhood. Got Your 6.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Watchman",
+    title: "Watchmen",
   },
   icons: {
-    icon: "/icon-512.png",
-    apple: "/apple-icon.png",
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg" }],
+  },
+  other: {
+    // Modern equivalent of apple-mobile-web-app-capable.
+    "mobile-web-app-capable": "yes",
   },
 };
 

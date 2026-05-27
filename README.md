@@ -81,8 +81,10 @@ npm run dev
 | Reaction                  | +1     | 30        |
 | Poll created              | +3     | 5         |
 | Poll vote                 | +1     | 20        |
-| RSVP "going"              | +5     | — (once per event) |
-| Check-in                  | +25    | — (once per event) |
+| RSVP "going" (event)      | +5     | — (once per event) |
+| Check-in at event         | +25    | — (once per event) |
+| Meetup RSVP "going"       | +2     | 10/day             |
+| Meetup check-in           | +10    | — (once per meetup) |
 | Invite approved (inviter) | +50    | unlimited |
 | Profile completed         | +10    | once      |
 | Add Instagram             | +5     | once      |

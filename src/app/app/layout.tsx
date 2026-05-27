@@ -21,7 +21,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       ) : null}
       <main className="mx-auto max-w-screen-sm">{children}</main>
-      <BottomNav />
+      <BottomNav
+        profileLabel={profile.full_name
+          .split(" ")
+          .slice(0, 2)
+          .map((s) => s[0]?.toUpperCase() ?? "")
+          .join("") || "·"}
+        profileSrc={profile.profile_photo_url}
+      />
     </div>
   );
 }

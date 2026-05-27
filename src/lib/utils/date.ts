@@ -15,6 +15,31 @@ export function fmtTime(timeStr: string | null) {
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+export function ageFromBirthday(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const b = new Date(iso);
+  if (Number.isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+
+export function fmtBirthday(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+}
+
+export function fmtMonthYear(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
 export function relativeTime(iso: string) {
   const then = new Date(iso).getTime();
   const diff = (Date.now() - then) / 1000;

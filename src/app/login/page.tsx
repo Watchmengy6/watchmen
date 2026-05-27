@@ -1,19 +1,29 @@
 import Link from "next/link";
 import { LoginForm } from "./LoginForm";
+import { Logo } from "@/components/brand/Logo";
 
-export const metadata = { title: "Sign in · The Watchman" };
+export const metadata = { title: "Sign in · The Watchmen" };
 
 export default function LoginPage() {
   return (
     <main className="min-h-[100dvh] flex flex-col px-6 safe-top safe-bottom">
-      <div className="pt-10">
-        <Link href="/" className="text-[11px] tracking-[0.25em] uppercase text-gold-300/80">
-          ← The Watchman
+      <div className="pt-6">
+        <Link
+          href="/"
+          className="h-9 w-9 -ml-1 inline-flex items-center justify-center text-ink-300 text-lg"
+          aria-label="Back"
+        >
+          ‹
         </Link>
       </div>
       <div className="flex-1 flex flex-col justify-center max-w-sm w-full mx-auto">
-        <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
-        <p className="text-ink-300 mt-2 text-[15px]">Sign in to the private network.</p>
+        <div className="flex justify-center mb-6">
+          <Logo className="h-16 w-16 text-gold-400" />
+        </div>
+        <h1 className="text-3xl font-semibold tracking-tight text-center">Welcome back</h1>
+        <p className="text-ink-300 mt-2 text-[15px] text-center">
+          Sign in to the private network.
+        </p>
         <div className="mt-8">
           <LoginForm />
         </div>
