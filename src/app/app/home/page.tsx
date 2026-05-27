@@ -60,18 +60,19 @@ export default async function HomePage() {
   ]);
 
   // ----- feed posts -----
-  const { data: posts } = await supabase
+  const { data: posts, error: postsErr } = await supabase
     .from("posts")
     .select(
-      `id, kind, body, created_at, media_url, image_url:media_url,
+      `id, kind, body, created_at, media_url,
        author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company),
        tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
        tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
-       tagged_meetup:meetups!posts_tagged_meetup_id_fkey(id, title, scheduled_for, location_name)`,
+       tagged_meetup:meetups!posts_tagged_meetup_id_fkey(id, title, when_at, location_name)`,
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (postsErr) console.error("[/app/home] posts query failed", postsErr);
 
   // Counts: likes + comments + my-like — three batched queries.
   const postIds = (posts ?? []).map((p: any) => p.id);
