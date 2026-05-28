@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireApproved } from "@/lib/auth/gates";
 import { createMeetupAction } from "@/lib/meetups/realActions";
 import { TzOffsetField } from "./TzOffsetField";
+import { LocationField } from "./LocationField";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export default async function NewMeetupPage() {
           />
         </div>
         <Field label="Location" name="location_name" placeholder="Black Crow Coffee" />
+        <LocationField />
         <Field label="Notes" name="notes" placeholder="Optional — anything attendees should know." textarea />
 
         <button

@@ -4,6 +4,7 @@ import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
 import { rsvpMeetupAction } from "@/lib/meetups/realActions";
+import { MeetupCheckInButton } from "@/components/meetups/MeetupCheckInButton";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function MeetupDetail({
   const { data: meetup } = await supabase
     .from("meetups")
     .select(
-      "id, title, notes, when_at, duration_min, location_name, address, category, host:profiles!meetups_host_user_id_fkey(id, full_name, profile_photo_url, occupation, company)",
+      "id, title, notes, when_at, duration_min, location_name, address, category, latitude, longitude, host:profiles!meetups_host_user_id_fkey(id, full_name, profile_photo_url, occupation, company)",
     )
     .eq("id", params.meetupId)
     .maybeSingle();
@@ -27,15 +28,17 @@ export default async function MeetupDetail({
   const { data: rsvps } = await supabase
     .from("meetup_rsvps")
     .select(
-      "user_id, going, profile:profiles!meetup_rsvps_user_id_fkey(id, full_name, profile_photo_url)",
+      "user_id, going, checked_in, profile:profiles!meetup_rsvps_user_id_fkey(id, full_name, profile_photo_url)",
     )
-    .eq("meetup_id", meetup.id)
-    .eq("going", true);
+    .eq("meetup_id", meetup.id);
 
-  const goingList = (rsvps ?? [])
+  const goingRsvps = (rsvps ?? []).filter((r: any) => r.going);
+  const goingList = goingRsvps
     .map((r: any) => (Array.isArray(r.profile) ? r.profile[0] : r.profile))
     .filter(Boolean);
-  const iAmGoing = (rsvps ?? []).some((r: any) => r.user_id === profile.id);
+  const myRsvp = (rsvps ?? []).find((r: any) => r.user_id === profile.id);
+  const iAmGoing = !!myRsvp?.going;
+  const iAmCheckedIn = !!myRsvp?.checked_in;
   const host = Array.isArray(meetup.host) ? meetup.host[0] : meetup.host;
 
   const when = new Date(meetup.when_at);
@@ -46,6 +49,15 @@ export default async function MeetupDetail({
     hour: "numeric",
     minute: "2-digit",
   });
+
+  // Check-in window: starts at when_at, closes at when_at + duration + 30min grace.
+  const now = new Date();
+  const windowEnd = new Date(
+    when.getTime() + (meetup.duration_min ?? 60) * 60_000 + 30 * 60_000,
+  );
+  const happeningNow = now >= when && now <= windowEnd;
+  const tooEarly = now < when;
+  const tooLate = now > windowEnd;
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
@@ -132,6 +144,43 @@ export default async function MeetupDetail({
             {iAmGoing ? "You're going · tap to undo" : "I'm in"}
           </button>
         </form>
+
+        {/* Geo check-in — only available when the user is going and the
+            meetup window is currently open. Awards +10 points server-side
+            after validating distance from the venue. */}
+        {iAmGoing ? (
+          happeningNow ? (
+            <MeetupCheckInButton
+              meetupId={meetup.id}
+              alreadyCheckedIn={iAmCheckedIn}
+            />
+          ) : tooEarly ? (
+            <div className="rounded-2xl bg-ink-800/80 hairline px-4 py-3 text-center">
+              <div className="text-[10.5px] tracking-[0.22em] uppercase text-ink-400">
+                Check-in
+              </div>
+              <div className="text-ink-100 text-[13px] mt-0.5">
+                Opens when the meetup starts ·{" "}
+                {when.toLocaleString("en-US", {
+                  weekday: "short",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </div>
+            </div>
+          ) : tooLate ? (
+            <div className="rounded-2xl bg-ink-800/80 hairline px-4 py-3 text-center">
+              <div className="text-[10.5px] tracking-[0.22em] uppercase text-ink-400">
+                Check-in
+              </div>
+              <div className="text-ink-100 text-[13px] mt-0.5">
+                {iAmCheckedIn
+                  ? "You checked in — nice."
+                  : "Check-in window is closed."}
+              </div>
+            </div>
+          ) : null
+        ) : null}
 
         {/* Going list */}
         <div>

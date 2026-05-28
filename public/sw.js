@@ -1,17 +1,122 @@
 // The Watchmen — Service Worker
-// Handles incoming Web Push messages and routes notification clicks
-// back to the right app screen. Also broadcasts to open tabs so the
-// app can render an in-app banner when the user is actively using it
-// (iOS suppresses the system banner in foreground).
+// Handles:
+//   1. Incoming Web Push and notification clicks (existing).
+//   2. App shell + static asset caching so repeat opens feel native-fast.
+//
+// Cache strategy:
+//   - Static assets (icons, logos, manifest, fonts, _next/static/*) →
+//     cache-first with background refresh ("stale-while-revalidate").
+//   - App pages (/app/*, /, /login) → network-first, falling back to
+//     cache only if the network fails. We never want to serve a stale
+//     RSC payload when the network is healthy.
+//   - Supabase API / push / auth → never cached.
 
-self.addEventListener("install", (event) => {
-  // Activate immediately on first install so push works without a reload.
+const CACHE_VERSION = "watchmen-v3";
+const ASSET_CACHE = `${CACHE_VERSION}-assets`;
+const PAGE_CACHE = `${CACHE_VERSION}-pages`;
+
+self.addEventListener("install", () => {
+  // Activate immediately on first install so push + caching work without a reload.
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  // Claim clients AND nuke any caches that don't match the current version
+  // so a SW update doesn't leave the user on stale assets.
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => !k.startsWith(CACHE_VERSION))
+          .map((k) => caches.delete(k)),
+      );
+      await self.clients.claim();
+    })(),
+  );
 });
+
+// Helpers ---------------------------------------------------------------
+
+function isAssetRequest(url) {
+  if (url.origin !== self.location.origin) return false;
+  return (
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/icon") ||
+    url.pathname.startsWith("/logo") ||
+    url.pathname === "/manifest.webmanifest" ||
+    /\.(png|jpe?g|svg|gif|webp|ico|woff2?|ttf|otf|css|js|map)$/i.test(
+      url.pathname,
+    )
+  );
+}
+
+function isPageRequest(request, url) {
+  if (url.origin !== self.location.origin) return false;
+  if (request.method !== "GET") return false;
+  // Don't cache the SW itself, push endpoint, or any API/auth path.
+  if (url.pathname === "/sw.js") return false;
+  if (url.pathname.startsWith("/api/")) return false;
+  if (url.pathname.startsWith("/auth/")) return false;
+  // We treat HTML navigations as page requests.
+  const accept = request.headers.get("accept") || "";
+  return request.mode === "navigate" || accept.includes("text/html");
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(ASSET_CACHE);
+  const cached = await cache.match(request);
+  const fetchPromise = fetch(request)
+    .then((response) => {
+      if (response && response.ok) cache.put(request, response.clone());
+      return response;
+    })
+    .catch(() => cached);
+  // Return cache immediately if we have it; otherwise wait for network.
+  return cached || fetchPromise;
+}
+
+async function networkFirst(request) {
+  const cache = await caches.open(PAGE_CACHE);
+  try {
+    const fresh = await fetch(request);
+    if (fresh && fresh.ok && request.method === "GET") {
+      cache.put(request, fresh.clone());
+    }
+    return fresh;
+  } catch (_) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    throw new Error("offline and no cache");
+  }
+}
+
+// Fetch interception ----------------------------------------------------
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch (_) {
+    return;
+  }
+
+  // Skip cross-origin requests entirely (Supabase, web-push, etc).
+  if (url.origin !== self.location.origin) return;
+
+  if (isAssetRequest(url)) {
+    event.respondWith(staleWhileRevalidate(request));
+    return;
+  }
+  if (isPageRequest(request, url)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+  // Everything else falls through to the network.
+});
+
+// Push (unchanged) ------------------------------------------------------
 
 self.addEventListener("push", (event) => {
   let payload = { title: "The Watchmen", body: "" };

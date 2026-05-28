@@ -19,6 +19,13 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   const category = (CATEGORIES as readonly string[]).includes(categoryRaw)
     ? categoryRaw
     : "Other";
+  // Optional GPS coords for venue. When present, geo check-in is
+  // enforced — attendees must be within 250m of these coords. When
+  // absent, check-in only enforces the time window.
+  const latitudeStr = String(formData.get("latitude") ?? "").trim();
+  const longitudeStr = String(formData.get("longitude") ?? "").trim();
+  const latitude = latitudeStr ? Number(latitudeStr) : null;
+  const longitude = longitudeStr ? Number(longitudeStr) : null;
   if (!title) return;
   if (!whenAtLocal) return;
 
@@ -51,6 +58,8 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
       duration_min: duration,
       location_name: locationName,
       category,
+      latitude,
+      longitude,
       host_user_id: me.id,
     })
     .select("id")
