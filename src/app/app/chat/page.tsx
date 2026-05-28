@@ -22,13 +22,17 @@ export default async function MainChatPage() {
     );
   }
 
-  const { data: messages } = await supabase
+  // Fetch newest 200, then reverse to render oldest→newest. (Order desc +
+  // limit ensures users open onto the latest conversation, not the very
+  // first message a busy room ever had.)
+  const { data: messagesDesc } = await supabase
     .from("messages")
     .select("*")
     .eq("chat_id", chat.id)
     .is("deleted_at", null)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
+  const messages = (messagesDesc ?? []).slice().reverse();
 
   const userIds = Array.from(new Set((messages ?? []).map((m) => m.user_id)));
   const { data: authors } = userIds.length

@@ -1,10 +1,18 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Profile } from "@/types/database";
 
-/** Get the current user's auth row + profile, or null. */
-export async function getCurrentUser() {
+/**
+ * Get the current user's auth row + profile, or null.
+ *
+ * Wrapped in React.cache() so multiple callers within the same request
+ * (e.g. the app layout + a child page both calling requireApproved())
+ * share a single Supabase roundtrip instead of hammering auth.getUser()
+ * and the me_full RPC twice per nav.
+ */
+export const getCurrentUser = cache(async () => {
   const supabase = supabaseServer();
   const {
     data: { user },
@@ -17,7 +25,7 @@ export async function getCurrentUser() {
   const profile = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 
   return { user, profile: (profile ?? null) as Profile | null };
-}
+});
 
 /** Require an authenticated, approved member. Redirect otherwise. */
 export async function requireApproved() {

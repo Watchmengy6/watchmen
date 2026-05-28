@@ -41,20 +41,21 @@ export default async function DmThreadPage({
       : thread.title ?? "Conversation";
   const headerAvatar = thread.kind === "dm" ? others[0]?.profile_photo_url ?? null : null;
 
-  // Messages — newest 100, render oldest-first.
-  const { data: messages } = await supabase
+  // Messages — newest 200, then reverse to render oldest-first.
+  const { data: messagesDesc } = await supabase
     .from("thread_messages")
     .select(
       "id, body, media_url, media_type, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
     )
     .eq("thread_id", thread.id)
     .is("deleted_at", null)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
+  const messages = (messagesDesc ?? []).slice().reverse();
 
-  // Mark this thread as read — clears the inbox unread badge.
-  // Fire-and-forget; safe to await since it's a quick UPDATE.
-  await markThreadReadAction(thread.id);
+  // Mark this thread as read — fire-and-forget so we don't block render
+  // on an UPDATE roundtrip. The badge clears on the next nav.
+  void markThreadReadAction(thread.id).catch(() => {});
 
   const adapted = (messages ?? []).map((m: any) => {
     const a = Array.isArray(m.author) ? m.author[0] : m.author;

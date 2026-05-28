@@ -17,37 +17,40 @@ export default async function HomePage() {
   const supabase = supabaseServer();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
-  // ----- next upcoming event (for the banner) -----
   const today = new Date().toISOString().slice(0, 10);
-  const { data: nextEvent } = await supabase
-    .from("events")
-    .select("id, title, event_date, start_time, location_name")
-    .eq("status", "published")
-    .gte("event_date", today)
-    .order("event_date", { ascending: true })
-    .order("start_time", { ascending: true })
-    .limit(1)
-    .maybeSingle();
 
-  // ----- pending approvals count (admin badge) -----
-  let pendingCount = 0;
-  if (isAdmin) {
-    const { count } = await supabase
-      .from("profiles")
+  // Phase 1: fan everything that only needs the profile into ONE Promise.all.
+  // Previously these ran serially (next-event → pending → unread → members →
+  // groups → posts) which stacked five round-trip waits before the first
+  // byte. Running in parallel is the single biggest win here.
+  const [
+    { data: nextEvent },
+    pendingRes,
+    { count: unread },
+    { data: members },
+    { data: joinedGroups },
+    postsRes,
+  ] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, title, event_date, start_time, location_name")
+      .eq("status", "published")
+      .gte("event_date", today)
+      .order("event_date", { ascending: true })
+      .order("start_time", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    isAdmin
+      ? supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending")
+      : Promise.resolve({ count: 0 }),
+    supabase
+      .from("notifications")
       .select("*", { count: "exact", head: true })
-      .eq("status", "pending");
-    pendingCount = count ?? 0;
-  }
-
-  // ----- unread notifications count -----
-  const { count: unread } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", profile.id)
-    .eq("read", false);
-
-  // ----- mentionable people + taggable groups -----
-  const [{ data: members }, { data: joinedGroups }] = await Promise.all([
+      .eq("user_id", profile.id)
+      .eq("read", false),
     supabase
       .from("profiles")
       .select("id, full_name, username")
@@ -58,68 +61,60 @@ export default async function HomePage() {
       .from("group_members")
       .select("group:groups(id, name)")
       .eq("user_id", profile.id),
+    supabase
+      .from("posts")
+      .select(
+        `id, kind, body, created_at, media_url,
+         author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company),
+         tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
+         tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
+         tagged_meetup:meetups!posts_tagged_meetup_id_fkey(id, title, when_at, location_name)`,
+      )
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
+  const pendingCount = pendingRes.count ?? 0;
+  const posts = postsRes.data;
+  if (postsRes.error) console.error("[/app/home] posts query failed", postsRes.error);
 
-  // ----- feed posts -----
-  const { data: posts, error: postsErr } = await supabase
-    .from("posts")
-    .select(
-      `id, kind, body, created_at, media_url,
-       author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company),
-       tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
-       tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
-       tagged_meetup:meetups!posts_tagged_meetup_id_fkey(id, title, when_at, location_name)`,
-    )
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (postsErr) console.error("[/app/home] posts query failed", postsErr);
-
-  // Counts: likes + comments + my-like — three batched queries.
+  // Phase 2: likes, my-likes, and comment previews for the posts we just got.
+  // (Comment-count fan-out removed — the previously computed commentCount
+  // map was never consumed; comments.length is sourced from allComments.)
   const postIds = (posts ?? []).map((p: any) => p.id);
-  const [
-    { data: likeRows },
-    { data: commentRows },
-    { data: myLikeRows },
-  ] = postIds.length
-    ? await Promise.all([
-        supabase.from("post_likes").select("post_id").in("post_id", postIds),
-        supabase.from("post_comments").select("post_id").in("post_id", postIds).is("deleted_at", null),
-        supabase
-          .from("post_likes")
-          .select("post_id")
-          .eq("user_id", profile.id)
-          .in("post_id", postIds),
-      ])
-    : [{ data: [] }, { data: [] }, { data: [] }];
+  const [{ data: likeRows }, { data: myLikeRows }, { data: cs }] =
+    postIds.length
+      ? await Promise.all([
+          supabase.from("post_likes").select("post_id").in("post_id", postIds),
+          supabase
+            .from("post_likes")
+            .select("post_id")
+            .eq("user_id", profile.id)
+            .in("post_id", postIds),
+          supabase
+            .from("post_comments")
+            .select(
+              "id, post_id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
+            )
+            .in("post_id", postIds)
+            .is("deleted_at", null)
+            .order("created_at", { ascending: true }),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }];
 
   const likeCount = new Map<string, number>();
   (likeRows ?? []).forEach((r: any) => {
     likeCount.set(r.post_id, (likeCount.get(r.post_id) ?? 0) + 1);
   });
-  const commentCount = new Map<string, number>();
-  (commentRows ?? []).forEach((r: any) => {
-    commentCount.set(r.post_id, (commentCount.get(r.post_id) ?? 0) + 1);
-  });
   const myLikes = new Set((myLikeRows ?? []).map((r: any) => r.post_id));
 
-  // Fetch comments only for posts being shown (lightweight — first 5 per post).
+  // Group comments by post — keep them ascending for display.
   const allComments = new Map<string, any[]>();
-  if (postIds.length > 0) {
-    const { data: cs } = await supabase
-      .from("post_comments")
-      .select(
-        "id, post_id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
-      )
-      .in("post_id", postIds)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
-    (cs ?? []).forEach((c: any) => {
-      const list = allComments.get(c.post_id) ?? [];
-      list.push(c);
-      allComments.set(c.post_id, list);
-    });
-  }
+  (cs ?? []).forEach((c: any) => {
+    const list = allComments.get(c.post_id) ?? [];
+    list.push(c);
+    allComments.set(c.post_id, list);
+  });
 
   // Adapt to FeedPostShape.
   const feed: FeedPostShape[] = (posts ?? []).map((p: any) => {

@@ -38,18 +38,21 @@ export default async function GroupChatPage({
     .maybeSingle();
   if (!thread) notFound();
 
-  const { data: messages } = await supabase
+  // Fetch newest 200 desc, then reverse to render oldest→newest.
+  const { data: messagesDesc } = await supabase
     .from("thread_messages")
     .select(
       "id, body, media_url, media_type, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
     )
     .eq("thread_id", thread.id)
     .is("deleted_at", null)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
+  const messages = (messagesDesc ?? []).slice().reverse();
 
   // Mark this group's thread as read for the current member.
-  await markThreadReadAction(thread.id);
+  // Fire-and-forget so we don't block render on an UPDATE roundtrip.
+  void markThreadReadAction(thread.id).catch(() => {});
 
   const adapted = (messages ?? []).map((m: any) => {
     const a = Array.isArray(m.author) ? m.author[0] : m.author;

@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation";
  * - Threshold default: 70px (matches iOS Safari's native gesture).
  * - Touch-only — on desktop the gesture won't fire because pointers can't
  *   produce a downward pull at scroll-top easily.
+ * - Listeners are bound ONCE (empty deps) and read state via refs so we
+ *   don't churn document-level handlers on every drag frame.
  */
 export function PullToRefresh({
   children,
@@ -24,10 +26,31 @@ export function PullToRefresh({
   const router = useRouter();
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Refs mirror the state so the long-lived touch handlers can read the
+  // latest values without forcing the effect to rebind on every change.
   const startYRef = useRef<number | null>(null);
   const activeRef = useRef(false);
+  const pullDistanceRef = useRef(0);
+  const refreshingRef = useRef(false);
+  const thresholdRef = useRef(threshold);
+
+  // Keep the threshold ref in sync with prop changes (rare).
+  useEffect(() => {
+    thresholdRef.current = threshold;
+  }, [threshold]);
 
   useEffect(() => {
+    // Local setters that update both ref + state without re-creating handlers.
+    const updatePull = (next: number) => {
+      pullDistanceRef.current = next;
+      setPullDistance(next);
+    };
+    const updateRefreshing = (next: boolean) => {
+      refreshingRef.current = next;
+      setRefreshing(next);
+    };
+
     function onTouchStart(e: TouchEvent) {
       // Only engage when we're at the top of the page.
       if (window.scrollY > 0) {
@@ -42,31 +65,31 @@ export function PullToRefresh({
       if (!activeRef.current || startYRef.current == null) return;
       const dy = (e.touches[0]?.clientY ?? 0) - startYRef.current;
       if (dy <= 0) {
-        setPullDistance(0);
+        updatePull(0);
         return;
       }
       // Resistance curve so the pull feels natural past the threshold.
-      const resisted = Math.min(dy, threshold * 2.5) * 0.6;
-      setPullDistance(resisted);
+      const resisted = Math.min(dy, thresholdRef.current * 2.5) * 0.6;
+      updatePull(resisted);
     }
     async function onTouchEnd() {
       if (!activeRef.current) return;
       activeRef.current = false;
-      const triggered = pullDistance >= threshold;
-      if (triggered && !refreshing) {
-        setRefreshing(true);
-        setPullDistance(threshold);
+      const triggered = pullDistanceRef.current >= thresholdRef.current;
+      if (triggered && !refreshingRef.current) {
+        updateRefreshing(true);
+        updatePull(thresholdRef.current);
         try {
           router.refresh();
           // Hold the spinner ~500ms so users feel the refresh; the RSC
           // payload usually lands well within that.
           await new Promise((r) => setTimeout(r, 500));
         } finally {
-          setRefreshing(false);
-          setPullDistance(0);
+          updateRefreshing(false);
+          updatePull(0);
         }
       } else {
-        setPullDistance(0);
+        updatePull(0);
       }
       startYRef.current = null;
     }
@@ -81,7 +104,10 @@ export function PullToRefresh({
       document.removeEventListener("touchend", onTouchEnd);
       document.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [pullDistance, refreshing, threshold, router]);
+    // Intentionally empty: handlers read everything off refs so we bind
+    // listeners exactly once for the lifetime of the component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   const progress = Math.min(pullDistance / threshold, 1);
 

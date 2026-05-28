@@ -244,6 +244,8 @@ export function FeedPost({
           <img
             src={post.image_url}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="mt-3 w-full max-h-[420px] object-cover"
           />
         ) : (

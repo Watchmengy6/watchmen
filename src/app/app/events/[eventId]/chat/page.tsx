@@ -36,13 +36,15 @@ export default async function EventChatPage({ params }: { params: { eventId: str
     .maybeSingle();
   if (!chat) notFound();
 
-  const { data: messages } = await supabase
+  // Fetch newest 200, then reverse to render oldest→newest.
+  const { data: messagesDesc } = await supabase
     .from("messages")
     .select("*")
     .eq("chat_id", chat.id)
     .is("deleted_at", null)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
+  const messages = (messagesDesc ?? []).slice().reverse();
 
   const userIds = Array.from(new Set((messages ?? []).map((m) => m.user_id)));
   const { data: authors } = userIds.length

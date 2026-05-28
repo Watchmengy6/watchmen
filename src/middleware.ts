@@ -72,10 +72,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { response, user, supabase } = await updateSession(request);
+  // Public routes — bail BEFORE touching Supabase auth so the landing
+  // page, login, signup, and invite flow don't pay an auth.getUser()
+  // roundtrip on every navigation.
+  if (isPublic(pathname)) return NextResponse.next();
 
-  // Public routes — always allow.
-  if (isPublic(pathname)) return response;
+  const { response, user, supabase } = await updateSession(request);
 
   // Pending screen — only signed-in users.
   if (pathname === "/pending") {
@@ -111,6 +113,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon-.*|apple-icon.*|manifest.webmanifest|robots.txt).*)",
+    // Exclude Next internals, manifest/robots, the service worker, logo
+    // and icon assets, and common static image/font extensions so middleware
+    // (and Supabase's auth.getUser roundtrip) never fires on those requests.
+    "/((?!_next/static|_next/image|favicon.ico|icon\\.svg|icon-.*|apple-icon.*|manifest\\.webmanifest|robots\\.txt|sw\\.js|logo-.*|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff|woff2|ttf|map)).*)",
   ],
 };
