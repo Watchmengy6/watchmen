@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
 
@@ -80,7 +81,16 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   }
 
   try {
-    const { data: mainChat } = await supabase
+    // Main Room is admin-write-only via RLS, so the meetup host (a regular
+    // member) can't insert directly. Use the service-role client to bypass
+    // — this is a system-style broadcast, attributed to the host so the
+    // bubble shows their name + avatar.
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { data: mainChat } = await admin
       .from("chats")
       .select("id")
       .eq("type", "main")
@@ -93,7 +103,7 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
         hour: "numeric",
         minute: "2-digit",
       });
-      await supabase.from("messages").insert({
+      await admin.from("messages").insert({
         chat_id: mainChat.id,
         user_id: me.id,
         // The chat renderer auto-converts /app/meetups/<id> into a "View

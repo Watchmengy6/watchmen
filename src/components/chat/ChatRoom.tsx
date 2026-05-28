@@ -34,6 +34,8 @@ export function ChatRoom({
   initialPolls,
   eventId,
   emptyState,
+  canSend = true,
+  readOnlyNote,
 }: {
   chatId: string;
   authUserId: string;
@@ -44,6 +46,10 @@ export function ChatRoom({
   initialPolls: PollRow[];
   eventId?: string | null;
   emptyState?: React.ReactNode;
+  /** When false, hide the composer (e.g. main room for non-admins). */
+  canSend?: boolean;
+  /** Note shown in place of the composer when canSend is false. */
+  readOnlyNote?: string;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
@@ -237,7 +243,17 @@ export function ChatRoom({
         )}
       </div>
       <div className="shrink-0 border-t border-white/[0.05] bg-ink-900/95 backdrop-blur-xl">
-        <MessageInput chatId={chatId} authUserId={authUserId} eventId={eventId} />
+        {canSend ? (
+          <MessageInput chatId={chatId} authUserId={authUserId} eventId={eventId} />
+        ) : (
+          <div
+            className="px-4 py-3 text-center text-[12.5px] text-ink-300"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
+            {readOnlyNote ??
+              "This room is for announcements only. Brothers can post on the feed or in DMs."}
+          </div>
+        )}
       </div>
     </div>
   );

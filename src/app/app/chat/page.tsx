@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function MainChatPage() {
   const { user, profile } = await requireApproved();
   const supabase = supabaseServer();
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   const { data: chat } = await supabase
     .from("chats")
@@ -95,6 +96,8 @@ export default async function MainChatPage() {
         initialAuthors={authorMap}
         initialReactions={reactions ?? []}
         initialPolls={enrichedPolls as any}
+        canSend={isAdmin}
+        readOnlyNote="The Main Room is for announcements from leadership. Post on the feed or DM a brother to start a conversation."
       />
     </div>
   );
