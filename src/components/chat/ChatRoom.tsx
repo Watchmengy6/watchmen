@@ -225,6 +225,7 @@ export function ChatRoom({
                   key={item.data.id}
                   message={item.data}
                   mine={item.data.user_id === myProfileId}
+                  myProfileId={myProfileId}
                 />
               ) : (
                 <div key={item.data.id} className="px-3 py-2">

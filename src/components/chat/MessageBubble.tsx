@@ -24,6 +24,8 @@ export interface MessageRow {
 interface Props {
   message: MessageRow;
   mine: boolean;
+  /** Viewer's profile id — used to detect whether *I* reacted, not the author. */
+  myProfileId?: string;
   groupPosition?: GroupPosition;
   showName?: boolean;
 }
@@ -51,6 +53,7 @@ function bubbleRadius(mine: boolean, pos: GroupPosition) {
 export function MessageBubble({
   message,
   mine,
+  myProfileId,
   groupPosition = "only",
   showName = false,
 }: Props) {
@@ -59,7 +62,11 @@ export function MessageBubble({
   const tightSpacing = groupPosition === "first" || groupPosition === "middle";
 
   const likeReactions = (message.reactions ?? []).filter((r) => r.reaction_type === "like");
-  const reactedByMe = likeReactions.some((r) => r.user_id === message.user_id); // placeholder
+  // "Liked by me" — compare each like's user_id to the *viewer*, not the
+  // message author (the old check made every authored message look liked).
+  const reactedByMe = myProfileId
+    ? likeReactions.some((r) => r.user_id === myProfileId)
+    : false;
 
   const onLike = () => start(() => void toggleReactionAction({ message_id: message.id }));
 

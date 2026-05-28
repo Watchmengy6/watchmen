@@ -55,12 +55,28 @@ export function MessageInput({
     }
     const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
     const mediaType = file.type.startsWith("video") ? "video" : "image";
-    await sendMessageAction({
+    const sendRes = await sendMessageAction({
       chat_id: chatId,
       content: text.trim(),
       media_url: pub.publicUrl,
       media_type: mediaType,
     });
+    if ((sendRes as any)?.error) {
+      // Surface the failure and try to clean up the orphan upload so it
+      // doesn't sit in storage forever.
+      push({
+        title: "Couldn't send",
+        body: (sendRes as any).error,
+        variant: "error",
+      });
+      try {
+        await supabase.storage.from("chat-media").remove([path]);
+      } catch {
+        /* best-effort cleanup */
+      }
+      setBusy(false);
+      return;
+    }
     setText("");
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
