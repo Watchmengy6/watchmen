@@ -4,6 +4,7 @@ import { ProfileEditor } from "./ProfileEditor";
 import { logoutAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
+import { EnablePushButton } from "@/components/push/EnablePushButton";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,17 @@ export default async function ProfilePage() {
           </Card>
         </div>
       ) : null}
+
+      {/* Push notifications */}
+      <div className="px-5 mt-8 space-y-2">
+        <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">
+          Notifications
+        </div>
+        <EnablePushButton />
+        <p className="text-[11.5px] text-ink-400 leading-relaxed">
+          Get a push when someone DMs you, posts an event, or @mentions you. On iPhone, install the app to your Home Screen first.
+        </p>
+      </div>
 
       <div className="px-5 mt-10">
         <form action={logoutAction}>

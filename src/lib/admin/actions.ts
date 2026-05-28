@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import { welcomeApproved } from "@/lib/mail/send";
+import { sendPushToUser } from "@/lib/push/send";
 
 /** Service-role client — only used server-side to look up auth emails. */
 function supabaseAdmin() {
@@ -64,6 +65,16 @@ export async function approveMemberAction(profileId: string) {
           fullName: target.full_name ?? "Brother",
         });
       }
+      // Push too — they may have enabled it from /pending.
+      await sendPushToUser({
+        userId: profileId,
+        payload: {
+          title: "You're in",
+          body: "Welcome to The Watchmen. Got Your 6.",
+          url: "/app/home",
+          tag: "approved",
+        },
+      });
     } catch (e) {
       console.warn("[approve] welcome email failed (non-fatal)", e);
     }

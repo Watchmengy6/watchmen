@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { notifyAdminNewSignup } from "@/lib/mail/send";
+import { sendPushToAdmins } from "@/lib/push/send";
 
 export async function loginAction(_prev: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -79,6 +80,13 @@ export async function signupAction(_prev: unknown, formData: FormData) {
           newMemberEmail: email,
         });
       }
+      // Fire push to all admins too.
+      await sendPushToAdmins({
+        title: "New signup awaiting approval",
+        body: `${full_name} just requested access`,
+        url: "/admin/pending",
+        tag: "admin-pending",
+      });
     } else {
       console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin notify skipped");
     }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
+import { sendPushToUser } from "@/lib/push/send";
 
 /** Start (or open) a DM thread with the given member. */
 export async function startDmAction(formData: FormData) {
@@ -53,6 +54,60 @@ export async function sendThreadMessageAction(
     media_type: mediaType,
   });
   if (error) return { error: error.message };
+
+  // Notify all OTHER thread members (skip self).
+  try {
+    const { data: thread } = await supabase
+      .from("threads")
+      .select("kind, title, group_id")
+      .eq("id", threadId)
+      .maybeSingle();
+    const { data: members } = await supabase
+      .from("thread_members")
+      .select("user_id, muted, profile:profiles!thread_members_user_id_fkey(id, full_name)")
+      .eq("thread_id", threadId);
+    const { data: meProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", me.id)
+      .maybeSingle();
+
+    const senderName = meProfile?.full_name ?? "A brother";
+    const previewBody = mediaUrl
+      ? mediaType === "image"
+        ? "📷 Photo"
+        : "🎥 Video"
+      : body.length > 120
+        ? `${body.slice(0, 117)}…`
+        : body;
+
+    const isGroup = thread?.kind === "group" || thread?.kind === "event";
+    const url =
+      thread?.kind === "group" && thread.group_id
+        ? `/app/groups/${thread.group_id}/chat`
+        : `/app/dms/${threadId}`;
+    const title = isGroup ? `${senderName} · ${thread?.title ?? "Group"}` : senderName;
+
+    await Promise.all(
+      (members ?? [])
+        .filter((m: any) => m.user_id !== me.id && !m.muted)
+        .map((m: any) =>
+          sendPushToUser({
+            userId: m.user_id,
+            payload: {
+              title,
+              body: previewBody,
+              url,
+              tag: `thread:${threadId}`,
+              renotify: true,
+            },
+          }),
+        ),
+    );
+  } catch (e) {
+    console.warn("[dm] push notify failed (non-fatal)", e);
+  }
+
   revalidatePath(`/app/dms/${threadId}`);
   return {};
 }

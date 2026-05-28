@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
+import { sendPushToUser } from "@/lib/push/send";
 
 /**
  * Create a feed post. Called from the FeedComposer client component
@@ -82,6 +83,29 @@ export async function createPostAction(
           post_id: post.id,
           mentioned_user_id: m.id,
         })),
+      );
+      // Push to each mentioned member (skip self).
+      const { data: meProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", me.id)
+        .maybeSingle();
+      const senderName = meProfile?.full_name ?? "A brother";
+      const preview = body.length > 100 ? `${body.slice(0, 97)}…` : body;
+      await Promise.all(
+        mentioned
+          .filter((m) => m.id !== me.id)
+          .map((m) =>
+            sendPushToUser({
+              userId: m.id,
+              payload: {
+                title: `${senderName} mentioned you`,
+                body: preview,
+                url: `/app/home`,
+                tag: `mention:${post.id}`,
+              },
+            }),
+          ),
       );
     }
   }

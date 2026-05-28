@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
+import { sendPushToUser } from "@/lib/push/send";
 import type { RsvpStatus } from "@/types/database";
 
 export async function rsvpAction(eventId: string, status: RsvpStatus) {
@@ -112,6 +114,46 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
     kind,
   });
   if (error) return { error: error.message };
+
+  // Push notify all approved members about the new event.
+  try {
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { data: approved } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("status", "approved");
+    if (approved && approved.length > 0) {
+      const targetUrl = "/app/events";
+      const isSponsored = kind === "sponsored";
+      const pushTitle = isSponsored ? "New sponsored event" : "New Watchmen event";
+      const dateLabel = new Date(event_date + "T00:00:00").toLocaleDateString(
+        "en-US",
+        { weekday: "short", month: "short", day: "numeric" },
+      );
+      const pushBody = `${title} · ${dateLabel}`;
+      await Promise.all(
+        approved
+          .filter((p) => p.id !== profile.id)
+          .map((p) =>
+            sendPushToUser({
+              userId: p.id,
+              payload: {
+                title: pushTitle,
+                body: pushBody,
+                url: targetUrl,
+                tag: "event-new",
+              },
+            }),
+          ),
+      );
+    }
+  } catch (e) {
+    console.warn("[events.create] push notify failed (non-fatal)", e);
+  }
 
   revalidatePath("/app/events");
   revalidatePath("/admin/events");
