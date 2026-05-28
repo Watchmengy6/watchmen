@@ -13,7 +13,10 @@ export default async function DmsPage({
 }) {
   const { profile } = await requireApproved();
   const supabase = supabaseServer();
-  const activeTab = (searchParams?.tab ?? "private") as "private" | "groups" | "events";
+  // The "events" sub-tab is hidden for now — event chat still lives on the
+  // old chats/messages tables and doesn't populate threads.kind = 'event'.
+  // Will be re-added when event chat is migrated onto the threads system.
+  const activeTab = (searchParams?.tab ?? "private") as "private" | "groups";
 
   // Threads where I'm a member.
   const { data: myThreadRows } = await supabase
@@ -33,7 +36,6 @@ export default async function DmsPage({
   // For DM threads, fetch the *other* member's name + avatar.
   const dmThreads = (threads ?? []).filter((t: any) => t.kind === "dm");
   const groupThreads = (threads ?? []).filter((t: any) => t.kind === "group");
-  const eventThreads = (threads ?? []).filter((t: any) => t.kind === "event");
 
   const dmCounterparts = new Map<string, any>();
   if (dmThreads.length > 0) {
@@ -54,11 +56,9 @@ export default async function DmsPage({
   const counts = {
     private: dmThreads.length,
     groups: groupThreads.length,
-    events: eventThreads.length,
   };
 
-  const listForTab =
-    activeTab === "groups" ? groupThreads : activeTab === "events" ? eventThreads : dmThreads;
+  const listForTab = activeTab === "groups" ? groupThreads : dmThreads;
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
@@ -89,7 +89,6 @@ export default async function DmsPage({
         <div className="px-4 pb-2 flex gap-1">
           <Pill href="/app/dms?tab=private" label="Private" count={counts.private} active={activeTab === "private"} />
           <Pill href="/app/dms?tab=groups" label="Groups" count={counts.groups} active={activeTab === "groups"} />
-          <Pill href="/app/dms?tab=events" label="Events" count={counts.events} active={activeTab === "events"} />
         </div>
       </div>
 
@@ -98,9 +97,7 @@ export default async function DmsPage({
           <div className="px-6 py-16 text-center text-ink-300 text-sm">
             {activeTab === "private"
               ? "No private messages yet. Tap New to start one."
-              : activeTab === "groups"
-                ? "Join a group to chat with the room."
-                : "Event threads will appear here when RSVPs open up."}
+              : "Join a group to chat with the room."}
           </div>
         ) : (
           listForTab.map((t: any) => {
@@ -112,9 +109,7 @@ export default async function DmsPage({
             const href =
               activeTab === "groups" && t.group_id
                 ? `/app/groups/${t.group_id}/chat`
-                : activeTab === "events" && t.event_id
-                  ? `/app/events/${t.event_id}/chat`
-                  : `/app/dms/${t.id}`;
+                : `/app/dms/${t.id}`;
             return (
               <Link
                 key={t.id}

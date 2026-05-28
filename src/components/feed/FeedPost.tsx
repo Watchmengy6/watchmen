@@ -8,6 +8,7 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { GroupCategoryTag } from "@/components/groups/GroupCategoryTag";
 import { ActivityCard, type ActivityCardKind } from "@/components/chat/ActivityCard";
 import { RichText } from "@/components/feed/RichText";
+import { SharePostButton } from "@/components/feed/SharePostButton";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 
@@ -285,14 +286,7 @@ export function FeedPost({
 
           <div className="flex-1" />
 
-          <button className="px-3 h-9 rounded-full text-[13px] text-ink-200 hover:text-white transition-colors" aria-label="Share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-                 strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
-              <path d="M4 12v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8" />
-              <path d="M16 6l-4-4-4 4" />
-              <path d="M12 2v14" />
-            </svg>
-          </button>
+          <SharePostButton postId={post.id} authorName={post.author.full_name} />
         </div>
 
         {/* Comments */}

@@ -193,6 +193,45 @@ export async function addCommentAction(
 
   await awardPoints({ userId: me.id, action: "comment_added", meta: { post_id: postId, comment_id: row.id } });
 
+  // Parse @mentions, write post_mentions rows, and push the mentioned brothers.
+  const mentionedUsernames = Array.from(
+    new Set(
+      (trimmed.match(/@([\w-]+)/g) ?? []).map((s) => s.slice(1).toLowerCase()),
+    ),
+  );
+  if (mentionedUsernames.length > 0) {
+    const { data: mentioned } = await supabase
+      .from("profiles")
+      .select("id")
+      .in("username", mentionedUsernames);
+    if (mentioned && mentioned.length > 0) {
+      await supabase.from("post_mentions").insert(
+        mentioned.map((m) => ({
+          post_id: postId,
+          comment_id: row.id,
+          mentioned_user_id: m.id,
+        })),
+      );
+      const preview =
+        trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
+      await Promise.all(
+        mentioned
+          .filter((m) => m.id !== me.id)
+          .map((m) =>
+            sendPushToUser({
+              userId: m.id,
+              payload: {
+                title: `${me.full_name} mentioned you`,
+                body: preview,
+                url: "/app/home",
+                tag: `mention-comment:${row.id}`,
+              },
+            }),
+          ),
+      );
+    }
+  }
+
   revalidatePath("/app/home");
   return {
     comment: {

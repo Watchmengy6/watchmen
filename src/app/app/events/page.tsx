@@ -20,7 +20,15 @@ export default async function EventsPage({
       ? searchParams.tab
       : "watchmen";
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Use the server's LOCAL date (Vercel/Supabase runs UTC but we display
+  // for the user's local day — close enough for upcoming/past bucketing).
+  // Better: client should send tz_offset like we do for meetup creation,
+  // and we'd compute "today" from that. For now this avoids UTC-midnight
+  // events flipping into "past" prematurely.
+  const now = new Date();
+  const localOffsetMin = now.getTimezoneOffset();
+  const localToday = new Date(now.getTime() - localOffsetMin * 60 * 1000);
+  const today = localToday.toISOString().slice(0, 10);
   const nowIso = new Date().toISOString();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 

@@ -65,7 +65,7 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   if (error) return { error: error.message };
 
   // Fire-and-forget: notify admins that someone is waiting for approval.
-  // Best-effort — never block the signup flow.
+  // Email goes only if RESEND_ADMIN_NOTIFY_TO is set; push fires regardless.
   try {
     const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
     if (adminInbox) {
@@ -80,16 +80,17 @@ export async function signupAction(_prev: unknown, formData: FormData) {
           newMemberEmail: email,
         });
       }
-      // Fire push to all admins too.
-      await sendPushToAdmins({
-        title: "New signup awaiting approval",
-        body: `${full_name} just requested access`,
-        url: "/admin/pending",
-        tag: "admin-pending",
-      });
     } else {
-      console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin notify skipped");
+      console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin email skipped");
     }
+    // Push fires regardless of email config — admin push subscriptions
+    // are independent of the email notify env var.
+    await sendPushToAdmins({
+      title: "New signup awaiting approval",
+      body: `${full_name} just requested access`,
+      url: "/admin/pending",
+      tag: "admin-pending",
+    });
   } catch (e) {
     console.warn("[signup] admin notify failed (non-fatal)", e);
   }

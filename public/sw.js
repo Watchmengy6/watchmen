@@ -39,22 +39,31 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      // 1) Tell open app tabs so they can show an in-app banner.
+      let hasVisibleClient = false;
       try {
         const clients = await self.clients.matchAll({
           type: "window",
           includeUncontrolled: true,
         });
+        // 1) Broadcast to open tabs so they can show an in-app banner.
         for (const client of clients) {
           client.postMessage({
             type: "watchmen:push",
             payload: { title, body: options.body, url: targetUrl, tag: options.tag },
           });
+          // visibilityState 'visible' means the user is actively viewing this tab.
+          if (client.visibilityState === "visible") {
+            hasVisibleClient = true;
+          }
         }
       } catch (_) {}
 
-      // 2) Always also fire the OS notification (for background/locked state).
-      await self.registration.showNotification(title, options);
+      // 2) Only fire the OS notification when no visible app tab is in
+      //    foreground. Avoids double-notifying (in-app banner + system banner).
+      //    Background/locked = no visible client = system notification fires.
+      if (!hasVisibleClient) {
+        await self.registration.showNotification(title, options);
+      }
     })(),
   );
 });

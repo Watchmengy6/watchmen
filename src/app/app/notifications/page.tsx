@@ -1,9 +1,36 @@
+import Link from "next/link";
 import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
-import { Card, CardBody } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { relativeTime } from "@/lib/utils/date";
 import { MarkAllRead } from "./MarkAllRead";
+
+/** Map a notification's related entity to the right in-app screen. */
+function hrefForNotification(n: any): string | null {
+  const t = n.related_entity_type as string | null;
+  const id = n.related_entity_id as string | null;
+  if (!t || !id) return null;
+  switch (t) {
+    case "event":
+      return `/app/events/${id}`;
+    case "meetup":
+      return `/app/meetups/${id}`;
+    case "post":
+    case "comment":
+      return `/app/home`;
+    case "profile":
+    case "user":
+      return `/app/members/${id}`;
+    case "thread":
+    case "dm":
+      return `/app/dms/${id}`;
+    case "group":
+      return `/app/groups/${id}`;
+    default:
+      return null;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +58,9 @@ export default async function NotificationsPage() {
         {(items ?? []).length === 0 ? (
           <EmptyState title="All quiet" body="You'll see RSVPs, polls, and approvals here." />
         ) : (
-          (items ?? []).map((n) => (
-            <Card key={n.id} className={`p-4 ${!n.read ? "ring-1 ring-gold-500/30" : ""}`}>
+          (items ?? []).map((n) => {
+            const href = hrefForNotification(n);
+            const inner = (
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-white text-sm font-semibold">{n.title}</div>
@@ -44,8 +72,22 @@ export default async function NotificationsPage() {
                   {relativeTime(n.created_at)}
                 </div>
               </div>
-            </Card>
-          ))
+            );
+            if (href) {
+              return (
+                <Link key={n.id} href={href} className="block">
+                  <Card className={`p-4 active:bg-ink-700/50 transition-colors ${!n.read ? "ring-1 ring-gold-500/30" : ""}`}>
+                    {inner}
+                  </Card>
+                </Link>
+              );
+            }
+            return (
+              <Card key={n.id} className={`p-4 ${!n.read ? "ring-1 ring-gold-500/30" : ""}`}>
+                {inner}
+              </Card>
+            );
+          })
         )}
       </div>
     </div>

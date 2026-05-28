@@ -201,12 +201,15 @@ export function ThreadChatClient({
     const localId = nextLocalId();
     pendingLocalIdsRef.current.push(localId);
     const isImage = result.mediaType === "image";
-    const placeholder = isImage ? "[image]" : "[video]";
+    // Human-readable preview (no internal placeholder tokens like "[image]").
+    // The thread_messages -> threads.last_message_preview trigger copies the
+    // body straight into the inbox list, so this is what brothers will see.
+    const preview = isImage ? "📷 Photo" : "🎥 Video";
     setMessages((prev) => [
       ...prev,
       {
         id: localId,
-        body: placeholder,
+        body: preview,
         media_url: result.url,
         media_type: result.mediaType,
         created_at: new Date().toISOString(),
@@ -218,7 +221,7 @@ export function ThreadChatClient({
     ]);
     const fd = new FormData();
     fd.set("thread_id", threadId);
-    fd.set("body", placeholder);
+    fd.set("body", preview);
     fd.set("media_url", result.url);
     fd.set("media_type", result.mediaType);
     startTransition(async () => {
@@ -263,7 +266,7 @@ export function ThreadChatClient({
                   {m.media_url && m.media_type === "video" ? (
                     <video src={m.media_url} controls className="rounded-2xl max-h-72" />
                   ) : null}
-                  {m.body && !(m.body === "[image]" || m.body === "[video]") ? (
+                  {m.body && !(m.body === "[image]" || m.body === "[video]" || m.body === "📷 Photo" || m.body === "🎥 Video") ? (
                     <div
                       className={
                         m.is_me

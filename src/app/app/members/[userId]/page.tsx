@@ -157,13 +157,7 @@ export default async function MemberProfile({ params }: { params: { userId: stri
                 <div key={b}>{b}</div>
               ))}
               {m.birthday ? (
-                <div>
-                  Birthday:{" "}
-                  {new Date(m.birthday).toLocaleDateString(undefined, {
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </div>
+                <div>Birthday: {formatDateString(m.birthday, { month: "long", day: "numeric" })}</div>
               ) : null}
             </div>
           </CardBody>
@@ -185,11 +179,13 @@ export default async function MemberProfile({ params }: { params: { userId: stri
         <CardBody>
           <div className="text-[11px] tracking-[0.25em] uppercase text-ink-300 mb-1">Joined</div>
           <div className="text-ink-200">
-            {new Date(m.membership_date ?? m.created_at).toLocaleDateString(undefined, {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            {m.membership_date
+              ? formatDateString(m.membership_date, { year: "numeric", month: "long", day: "numeric" })
+              : new Date(m.created_at).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
           </div>
         </CardBody>
       </Card>
@@ -204,4 +200,28 @@ function Stat({ label, value }: { label: string; value: number }) {
       <div className="text-[11px] text-ink-300 mt-0.5">{label}</div>
     </div>
   );
+}
+
+/**
+ * Format a YYYY-MM-DD date string WITHOUT timezone conversion.
+ * `new Date("2026-05-27")` parses as UTC midnight, which renders as the
+ * previous day in any US time zone. We parse the parts manually so the
+ * displayed day matches what the user typed.
+ */
+function formatDateString(
+  dateStr: string,
+  opts: Intl.DateTimeFormatOptions,
+): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (!m) {
+    try {
+      return new Date(dateStr).toLocaleDateString(undefined, opts);
+    } catch {
+      return dateStr;
+    }
+  }
+  const [, y, mo, d] = m;
+  // Build a local-time Date so toLocaleDateString gives the right calendar day.
+  const local = new Date(Number(y), Number(mo) - 1, Number(d));
+  return local.toLocaleDateString(undefined, opts);
 }
