@@ -59,6 +59,13 @@ export function ChatRoom({
     el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
+  // Refs to give the realtime handlers stable access to current state without
+  // tearing down + re-subscribing the channel on every message arrival.
+  const authorsRef = useRef(authors);
+  authorsRef.current = authors;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   useEffect(() => {
     const ch = supabase
       .channel(`chat:${chatId}`)
@@ -67,7 +74,7 @@ export function ChatRoom({
         { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
         async (payload) => {
           const m = payload.new as any;
-          if (!authors[m.user_id]) {
+          if (!authorsRef.current[m.user_id]) {
             const { data: a } = await supabase
               .from("profiles")
               .select("id, full_name, profile_photo_url")
@@ -83,7 +90,7 @@ export function ChatRoom({
         { event: "INSERT", schema: "public", table: "message_reactions" },
         (payload) => {
           const r = payload.new as any;
-          if (!messages.find((m) => m.id === r.message_id)) return;
+          if (!messagesRef.current.find((m) => m.id === r.message_id)) return;
           setReactions((prev) => [...prev, r]);
         },
       )
@@ -127,7 +134,39 @@ export function ChatRoom({
           const v = payload.new as any;
           setPolls((prev) =>
             prev.map((p) =>
-              p.id === v.poll_id ? { ...p, votes: [...p.votes, v] } : p,
+              p.id === v.poll_id
+                ? {
+                    ...p,
+                    // Dedup: a re-vote from the same user replaces their old row.
+                    votes: [
+                      ...p.votes.filter((x) => x.user_id !== v.user_id),
+                      v,
+                    ],
+                  }
+                : p,
+            ),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "poll_votes" },
+        (payload) => {
+          const v = payload.old as any;
+          setPolls((prev) =>
+            prev.map((p) =>
+              p.id === v.poll_id
+                ? {
+                    ...p,
+                    votes: p.votes.filter(
+                      (x) =>
+                        !(
+                          x.user_id === v.user_id &&
+                          x.poll_option_id === v.poll_option_id
+                        ),
+                    ),
+                  }
+                : p,
             ),
           );
         },
@@ -136,7 +175,9 @@ export function ChatRoom({
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [supabase, chatId, authors, messages]);
+    // Channel only depends on chatId — using refs above prevents churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, chatId]);
 
   const enriched: MessageRow[] = useMemo(() => {
     return messages.map((m) => ({
@@ -165,8 +206,10 @@ export function ChatRoom({
   }, [enriched, polls]);
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-3.75rem)]">
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto pt-14">
+    // Flex column that fills the viewport minus the top header (~3.75rem)
+    // and reserves room for the bottom nav (~5rem). Input sticks above the nav.
+    <div className="flex flex-col h-[calc(100dvh-3.75rem-5rem)]">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-2 pt-2">
         {timeline.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             {emptyState ?? (
@@ -191,7 +234,9 @@ export function ChatRoom({
           </div>
         )}
       </div>
-      <MessageInput chatId={chatId} authUserId={authUserId} eventId={eventId} />
+      <div className="shrink-0 border-t border-white/[0.05] bg-ink-900/95 backdrop-blur-xl">
+        <MessageInput chatId={chatId} authUserId={authUserId} eventId={eventId} />
+      </div>
     </div>
   );
 }

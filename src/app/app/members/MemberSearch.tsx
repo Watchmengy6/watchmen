@@ -5,11 +5,7 @@ import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/Input";
 import { MemberCard } from "@/components/members/MemberCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-
-const INTERESTS = [
-  "Real estate","Business","Investing","Tech","Fitness","Cars","Watches",
-  "Church","Networking","Entrepreneurship","Golf","Boating",
-];
+import { INTERESTS } from "@/lib/profile/actions";
 
 export function MemberSearch({
   initialQ,

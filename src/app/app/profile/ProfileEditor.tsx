@@ -21,6 +21,7 @@ function Submit() {
 
 interface Defaults {
   full_name: string;
+  username: string;
   bio: string;
   occupation: string;
   company: string;
@@ -60,6 +61,19 @@ export function ProfileEditor({
           <div>
             <Label>Name</Label>
             <Input name="full_name" defaultValue={defaults.full_name} required />
+          </div>
+          <div>
+            <Label>Username (used for @mentions)</Label>
+            <Input
+              name="username"
+              defaultValue={defaults.username}
+              placeholder="aaron"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              pattern="[a-z0-9_\-]{3,24}"
+              title="3–24 characters: lowercase letters, digits, _ or -"
+            />
           </div>
           <div>
             <Label>Short bio</Label>

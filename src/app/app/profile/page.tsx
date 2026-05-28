@@ -29,6 +29,7 @@ export default async function ProfilePage() {
         authUserId={user.id}
         defaults={{
           full_name: profile.full_name ?? "",
+          username: (profile as any).username ?? "",
           bio: profile.bio ?? "",
           occupation: profile.occupation ?? "",
           company: profile.company ?? "",

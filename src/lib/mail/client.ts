@@ -17,5 +17,9 @@ export function getResend(): Resend | null {
 
 export const MAIL_FROM = "The Watchmen <noreply@gy6.me>";
 export const MAIL_REPLY_TO = "noreply@gy6.me";
+// Use NEXT_PUBLIC_SITE_URL (the same var the invite landing screen and README
+// document). Fall back to the deployed Vercel domain.
 export const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://watchmen.gy6.me";
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "https://watchmen-six.vercel.app";

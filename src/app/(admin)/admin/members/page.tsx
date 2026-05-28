@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -8,13 +8,24 @@ import { requireAdmin } from "@/lib/auth/gates";
 
 export const dynamic = "force-dynamic";
 
+// Service-role client. Use ONLY in admin-gated server components where we
+// need to read columns (email, etc.) that are revoked from the authenticated
+// role. requireAdmin() above gates access — we're trusting the admin.
+function supabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
 export default async function AdminMembersPage({
   searchParams,
 }: {
   searchParams: { q?: string };
 }) {
   const { profile } = await requireAdmin();
-  const supabase = supabaseServer();
+  const supabase = supabaseAdmin();
 
   let query = supabase
     .from("profiles")
@@ -22,9 +33,15 @@ export default async function AdminMembersPage({
     .order("points_total", { ascending: false });
 
   if (searchParams.q) {
-    query = query.or(
-      `full_name.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,occupation.ilike.%${searchParams.q}%`,
-    );
+    const safe = searchParams.q
+      .replace(/[,()]/g, " ")
+      .replace(/[%_]/g, (c) => `\\${c}`)
+      .trim();
+    if (safe) {
+      query = query.or(
+        `full_name.ilike.%${safe}%,email.ilike.%${safe}%,occupation.ilike.%${safe}%`,
+      );
+    }
   }
 
   const { data: members } = await query.limit(200);

@@ -296,6 +296,7 @@ export default async function HomePage() {
                 post={post}
                 meName={profile.full_name}
                 meAvatar={profile.profile_photo_url}
+                mentionablePeople={mentionable}
               />
             ))
           )}

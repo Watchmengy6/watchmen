@@ -72,15 +72,45 @@ export interface FeedPostProps {
   ) => Promise<{ comment?: FeedPostComment; error?: string } | void>;
   meName?: string;
   meAvatar?: string | null;
+  /** Members the user can @mention in a comment. */
+  mentionablePeople?: { id: string; full_name: string; username: string }[];
 }
 
-export function FeedPost({ post, onToggleLike, onAddComment, meName, meAvatar }: FeedPostProps) {
+export function FeedPost({
+  post,
+  onToggleLike,
+  onAddComment,
+  meName,
+  meAvatar,
+  mentionablePeople = [],
+}: FeedPostProps) {
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likes, setLikes] = useState(post.likes);
-  const [comments, setComments] = useState<FeedPostComment[]>(post.comments);
+  const [comments, setComments] = useState<FeedPostComment[]>(
+    Array.isArray(post.comments) ? post.comments : [],
+  );
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
+
+  // @ mention picker for comment input.
+  const mentionQuery = (() => {
+    const m = draft.match(/@([\w-]*)$/);
+    return m ? m[1] : null;
+  })();
+  const mentionMatches =
+    mentionQuery !== null
+      ? mentionablePeople
+          .filter((u) =>
+            u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+          )
+          .slice(0, 5)
+      : [];
+
+  function insertCommentMention(username: string) {
+    const next = draft.replace(/@([\w-]*)$/, `@${username} `);
+    setDraft(next);
+  }
 
   const memberHref = post.preview
     ? "/preview/member"
@@ -293,33 +323,59 @@ export function FeedPost({ post, onToggleLike, onAddComment, meName, meAvatar }:
                 </div>
               ))
             )}
-            <div className="flex items-center gap-2 pt-1">
-              <Avatar src={meAvatar ?? undefined} name={meName ?? "You"} size={28} />
-              <div className="flex-1 flex items-center gap-2">
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      submitComment();
-                    }
-                  }}
-                  placeholder="Add a comment…"
-                  className="flex-1 h-9 rounded-full bg-ink-800 hairline px-3 text-[14px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
-                />
-                <button
-                  type="button"
-                  onClick={submitComment}
-                  disabled={!draft.trim() || pending}
-                  className="h-9 w-9 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black flex items-center justify-center disabled:opacity-40 shrink-0"
-                  aria-label="Send comment"
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-                    <path d="M2 21 23 12 2 3l5 9-5 9Z" />
-                  </svg>
-                </button>
+            <div className="pt-1">
+              <div className="flex items-center gap-2">
+                <Avatar src={meAvatar ?? undefined} name={meName ?? "You"} size={28} />
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        submitComment();
+                      }
+                    }}
+                    placeholder="Add a comment…"
+                    className="flex-1 h-9 rounded-full bg-ink-800 hairline px-3 text-[14px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={submitComment}
+                    disabled={!draft.trim() || pending}
+                    className="h-9 w-9 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black flex items-center justify-center disabled:opacity-40 shrink-0"
+                    aria-label="Send comment"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                      <path d="M2 21 23 12 2 3l5 9-5 9Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
+              {/* @ mention live picker for comments */}
+              {mentionMatches.length > 0 ? (
+                <div className="mt-2 rounded-xl bg-ink-900/80 hairline overflow-hidden">
+                  <div className="px-3 py-1.5 text-[10px] tracking-[0.25em] uppercase text-ink-400">
+                    Tag a brother
+                  </div>
+                  <div className="max-h-44 overflow-y-auto">
+                    {mentionMatches.map((u) => (
+                      <button
+                        type="button"
+                        key={u.id}
+                        onClick={() => insertCommentMention(u.username)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.04] text-left"
+                      >
+                        <Avatar name={u.full_name} size={24} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] text-white truncate">{u.full_name}</div>
+                          <div className="text-[11px] text-gold-300/80">@{u.username}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

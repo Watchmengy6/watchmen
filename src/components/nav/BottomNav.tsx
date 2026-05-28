@@ -23,32 +23,50 @@ interface BottomNavProps {
 
 export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavProps) {
   const pathname = usePathname() ?? "";
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
-  // Detect on-screen keyboard via visualViewport. On iOS Safari/PWA, the visual
-  // viewport shrinks when the keyboard opens; we hide the nav so the focused
-  // input + send button remain accessible right above the keyboard.
+  // Hide whenever an input/textarea is focused. More reliable on iOS PWA
+  // than visualViewport (which can fire spuriously on rotation/scroll).
   useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
-    const vv = window.visualViewport;
-    function onResize() {
-      // Keyboard is "open" when visual viewport height is meaningfully smaller.
-      const hidden = vv!.height < window.innerHeight - 100;
-      setKeyboardOpen(hidden);
+    if (typeof document === "undefined") return;
+    function onFocusIn(e: FocusEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
+        setInputFocused(true);
+      }
     }
-    vv.addEventListener("resize", onResize);
-    onResize();
-    return () => vv.removeEventListener("resize", onResize);
+    function onFocusOut() {
+      // Delay slightly — some pickers blur briefly between widgets.
+      setTimeout(() => {
+        const ae = document.activeElement as HTMLElement | null;
+        const stillTyping =
+          !!ae &&
+          (ae.tagName === "INPUT" ||
+            ae.tagName === "TEXTAREA" ||
+            ae.isContentEditable);
+        setInputFocused(stillTyping);
+      }, 0);
+    }
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
   }, []);
 
-  // Hide on full-screen chat threads so the message input isn't covered.
+  // Hide on full-screen chat thread pages so the message input isn't covered.
+  // (We keep nav on /app/chat itself so users can navigate away — the
+  // focus-detection above hides it while they're typing.)
   const HIDE_ON = [
     /^\/app\/dms\/[^/]+$/,
     /^\/app\/groups\/[^/]+\/chat$/,
     /^\/app\/events\/[^/]+\/chat$/,
   ];
   if (pathname && HIDE_ON.some((re) => re.test(pathname))) return null;
-  if (keyboardOpen) return null;
+  if (inputFocused) return null;
 
   return (
     <nav

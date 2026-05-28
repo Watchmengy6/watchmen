@@ -7,8 +7,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { profile } = await requireApproved();
 
   return (
-    <div className="min-h-[100dvh] bg-ink-900 text-white pb-20">
-      <main className="mx-auto max-w-screen-sm">{children}</main>
+    <div className="min-h-[100dvh] bg-ink-900 text-white pb-20 overflow-x-hidden">
+      <main className="mx-auto max-w-screen-sm overflow-x-hidden">{children}</main>
       <BottomNav
         profileLabel={
           profile.full_name

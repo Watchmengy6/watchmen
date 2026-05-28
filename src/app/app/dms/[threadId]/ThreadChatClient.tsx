@@ -40,6 +40,10 @@ export function ThreadChatClient({
   const [err, setErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // FIFO queue of local-* ids that are waiting for their realtime echo.
+  // When a realtime INSERT from me arrives, we shift the front of the queue
+  // and replace that placeholder with the real row.
+  const pendingLocalIdsRef = useRef<string[]>([]);
 
   // Auto-scroll to bottom when new messages arrive.
   useEffect(() => {
@@ -67,22 +71,38 @@ export function ThreadChatClient({
         },
         async (payload) => {
           const m: any = payload.new;
-          // If this insert is from ME, reconcile the optimistic local
-          // placeholder with the real row (so the real id replaces the
-          // local one and any server-side fields like edited_at land).
+          // If this insert is from ME, reconcile in FIFO order: pop the
+          // oldest pending local id and replace that exact placeholder.
           if (m.author_id === meId) {
-            setMessages((prev) => {
-              // Replace the most recent local placeholder with body match.
-              const idx = [...prev].reverse().findIndex(
-                (msg) =>
-                  msg.is_me &&
-                  msg.id.startsWith("local-") &&
-                  (msg.body === m.body || (m.media_url && msg.id.startsWith("local-"))),
+            const targetLocalId = pendingLocalIdsRef.current.shift();
+            if (!targetLocalId) {
+              // No pending local match (e.g. message sent from another tab)
+              // — just append as a normal mine row, deduped by real id.
+              setMessages((prev) =>
+                prev.some((x) => x.id === m.id)
+                  ? prev
+                  : [
+                      ...prev,
+                      {
+                        id: m.id,
+                        body: m.body ?? "",
+                        media_url: m.media_url ?? null,
+                        media_type: (m.media_type ?? "none") as "none" | "image" | "video",
+                        created_at: m.created_at,
+                        author_id: m.author_id,
+                        author_name: meName,
+                        author_photo: meAvatar ?? null,
+                        is_me: true,
+                      },
+                    ],
               );
+              return;
+            }
+            setMessages((prev) => {
+              const idx = prev.findIndex((x) => x.id === targetLocalId);
               if (idx === -1) return prev;
-              const realIdx = prev.length - 1 - idx;
               const next = [...prev];
-              next[realIdx] = {
+              next[idx] = {
                 id: m.id,
                 body: m.body ?? "",
                 media_url: m.media_url ?? null,
@@ -126,11 +146,17 @@ export function ThreadChatClient({
     };
   }, [threadId, meId, meName, meAvatar]);
 
+  // Generates a globally-unique local id we can match in the realtime echo
+  // and rollback on failure.
+  function nextLocalId() {
+    return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   function send() {
     const body = text.trim();
     if (!body || pending) return;
-    // Optimistic append.
-    const localId = `local-${Date.now()}`;
+    const localId = nextLocalId();
+    pendingLocalIdsRef.current.push(localId);
     setMessages((prev) => [
       ...prev,
       {
@@ -148,7 +174,15 @@ export function ThreadChatClient({
     fd.set("thread_id", threadId);
     fd.set("body", body);
     startTransition(async () => {
-      await sendThreadMessageAction(fd);
+      const r = await sendThreadMessageAction(fd);
+      if (r && r.error) {
+        // Rollback the optimistic row and remove it from the pending queue.
+        pendingLocalIdsRef.current = pendingLocalIdsRef.current.filter(
+          (id) => id !== localId,
+        );
+        setMessages((prev) => prev.filter((m) => m.id !== localId));
+        setErr(r.error);
+      }
     });
   }
 
@@ -164,8 +198,8 @@ export function ThreadChatClient({
       setErr(result.error);
       return;
     }
-    // Send a message with just the media URL.
-    const localId = `local-${Date.now()}`;
+    const localId = nextLocalId();
+    pendingLocalIdsRef.current.push(localId);
     const isImage = result.mediaType === "image";
     const placeholder = isImage ? "[image]" : "[video]";
     setMessages((prev) => [
@@ -173,6 +207,8 @@ export function ThreadChatClient({
       {
         id: localId,
         body: placeholder,
+        media_url: result.url,
+        media_type: result.mediaType,
         created_at: new Date().toISOString(),
         author_id: meId,
         author_name: meName,
@@ -186,7 +222,14 @@ export function ThreadChatClient({
     fd.set("media_url", result.url);
     fd.set("media_type", result.mediaType);
     startTransition(async () => {
-      await sendThreadMessageAction(fd);
+      const r = await sendThreadMessageAction(fd);
+      if (r && r.error) {
+        pendingLocalIdsRef.current = pendingLocalIdsRef.current.filter(
+          (id) => id !== localId,
+        );
+        setMessages((prev) => prev.filter((m) => m.id !== localId));
+        setErr(r.error);
+      }
     });
   }
 

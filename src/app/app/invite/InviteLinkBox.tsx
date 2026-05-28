@@ -43,7 +43,17 @@ export function InviteLinkBox({ link }: { link: string }) {
           <div className="text-[10.5px] tracking-[0.2em] uppercase text-ink-400 mb-1">
             Your link
           </div>
-          <div className="font-mono text-sm text-gold-200 break-all">{link}</div>
+          {/* Read-only input so long-press / tap-and-hold lets users select
+              and copy on iOS even when navigator.clipboard isn't available. */}
+          <input
+            type="text"
+            readOnly
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+            onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+            className="w-full bg-transparent font-mono text-sm text-gold-200 break-all outline-none select-text"
+            style={{ WebkitUserSelect: "text", userSelect: "text" }}
+          />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button variant="outline" onClick={copy}>

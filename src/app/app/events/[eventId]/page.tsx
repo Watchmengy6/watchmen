@@ -64,7 +64,12 @@ export default async function EventDetail({ params }: { params: { eventId: strin
           ) : null}
         </div>
 
-        <MapPreview lat={event.latitude} lng={event.longitude} label={event.location_name} />
+        <MapPreview
+          lat={event.latitude}
+          lng={event.longitude}
+          label={event.location_name}
+          address={event.address}
+        />
 
         {event.description ? (
           <Card>

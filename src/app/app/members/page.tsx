@@ -19,9 +19,18 @@ export default async function MembersPage({
     .order("points_total", { ascending: false });
 
   if (searchParams.q) {
-    query = query.or(
-      `full_name.ilike.%${searchParams.q}%,occupation.ilike.%${searchParams.q}%,company.ilike.%${searchParams.q}%`,
-    );
+    // PostgREST's .or() takes a comma-separated filter string, and commas /
+    // parens inside the user's query would corrupt that grammar. Strip the
+    // dangerous chars and also escape % / _ so users can't inject wildcards.
+    const safe = searchParams.q
+      .replace(/[,()]/g, " ")
+      .replace(/[%_]/g, (c) => `\\${c}`)
+      .trim();
+    if (safe) {
+      query = query.or(
+        `full_name.ilike.%${safe}%,occupation.ilike.%${safe}%,company.ilike.%${safe}%`,
+      );
+    }
   }
   if (searchParams.interest) {
     query = query.contains("interests", [searchParams.interest]);
