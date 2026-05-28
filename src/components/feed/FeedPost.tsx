@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { searchMembersForMention } from "@/lib/feed/actions";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -94,19 +95,44 @@ export function FeedPost({
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
 
-  // @ mention picker for comment input.
+  // @ mention picker for comment input. Uses the static list when one is
+  // provided (preview mode), otherwise debounces a search action so the
+  // home page doesn't need to ship the full directory just for this.
   const mentionQuery = (() => {
     const m = draft.match(/@([\w-]*)$/);
     return m ? m[1] : null;
   })();
+
+  const [remoteMatches, setRemoteMatches] = useState<
+    { id: string; full_name: string; username: string }[]
+  >([]);
+  useEffect(() => {
+    if (mentionablePeople.length > 0) return;
+    if (mentionQuery === null || mentionQuery.length === 0) {
+      setRemoteMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(async () => {
+      const rows = await searchMembersForMention(mentionQuery);
+      if (!cancelled) setRemoteMatches(rows);
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [mentionQuery, mentionablePeople.length]);
+
   const mentionMatches =
-    mentionQuery !== null
-      ? mentionablePeople
-          .filter((u) =>
-            u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
-          )
-          .slice(0, 5)
-      : [];
+    mentionQuery === null
+      ? []
+      : mentionablePeople.length > 0
+        ? mentionablePeople
+            .filter((u) =>
+              u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+            )
+            .slice(0, 5)
+        : remoteMatches.slice(0, 5);
 
   function insertCommentMention(username: string) {
     const next = draft.replace(/@([\w-]*)$/, `@${username} `);

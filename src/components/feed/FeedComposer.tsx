@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useEffect, useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { uploadMedia } from "@/lib/uploads/client";
+import { searchMembersForMention } from "@/lib/feed/actions";
 
 const types = [
   { id: "post", label: "Post" },
@@ -72,14 +73,38 @@ export function FeedComposer({
     const m = text.match(/@([\w-]*)$/);
     return m ? m[1] : null;
   })();
+
+  // Fetch matches from the server on demand (debounced) when no static
+  // list is provided. The static-list path is still used by the preview
+  // tree and any caller that wants to pre-populate.
+  const [remoteMatches, setRemoteMatches] = useState<MentionablePerson[]>([]);
+  useEffect(() => {
+    if (mentionablePeople.length > 0) return; // static list — no fetch
+    if (mentionQuery === null || mentionQuery.length === 0) {
+      setRemoteMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(async () => {
+      const rows = await searchMembersForMention(mentionQuery);
+      if (!cancelled) setRemoteMatches(rows);
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [mentionQuery, mentionablePeople.length]);
+
   const mentionMatches =
-    mentionQuery !== null
-      ? mentionablePeople
-          .filter((u) =>
-            u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
-          )
-          .slice(0, 5)
-      : [];
+    mentionQuery === null
+      ? []
+      : mentionablePeople.length > 0
+        ? mentionablePeople
+            .filter((u) =>
+              u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+            )
+            .slice(0, 5)
+        : remoteMatches.slice(0, 5);
 
   function insertMention(username: string) {
     const newText = text.replace(/@([\w-]*)$/, `@${username} `);

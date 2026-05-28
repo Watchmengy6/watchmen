@@ -159,45 +159,48 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
     console.warn("[createEventAction] main-chat broadcast failed (non-fatal)", e);
   }
 
-  // Push notify all approved members about the new event.
-  try {
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    );
-    const { data: approved } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("status", "approved");
-    if (approved && approved.length > 0) {
-      const targetUrl = "/app/events";
-      const isSponsored = kind === "sponsored";
-      const pushTitle = isSponsored ? "New sponsored event" : "New Watchmen event";
-      const dateLabel = new Date(event_date + "T00:00:00").toLocaleDateString(
-        "en-US",
-        { weekday: "short", month: "short", day: "numeric" },
+  // Fire-and-forget push fan-out — don't make the creator wait for
+  // every push delivery before the action returns.
+  void (async () => {
+    try {
+      const admin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } },
       );
-      const pushBody = `${title} · ${dateLabel}`;
-      await Promise.all(
-        approved
-          .filter((p) => p.id !== profile.id)
-          .map((p) =>
-            sendPushToUser({
-              userId: p.id,
-              payload: {
-                title: pushTitle,
-                body: pushBody,
-                url: targetUrl,
-                tag: "event-new",
-              },
-            }),
-          ),
-      );
+      const { data: approved } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("status", "approved");
+      if (approved && approved.length > 0) {
+        const targetUrl = "/app/events";
+        const isSponsored = kind === "sponsored";
+        const pushTitle = isSponsored ? "New sponsored event" : "New Watchmen event";
+        const dateLabel = new Date(event_date + "T00:00:00").toLocaleDateString(
+          "en-US",
+          { weekday: "short", month: "short", day: "numeric" },
+        );
+        const pushBody = `${title} · ${dateLabel}`;
+        await Promise.all(
+          approved
+            .filter((p) => p.id !== profile.id)
+            .map((p) =>
+              sendPushToUser({
+                userId: p.id,
+                payload: {
+                  title: pushTitle,
+                  body: pushBody,
+                  url: targetUrl,
+                  tag: "event-new",
+                },
+              }),
+            ),
+        );
+      }
+    } catch (e) {
+      console.warn("[events.create] push notify failed (non-fatal)", e);
     }
-  } catch (e) {
-    console.warn("[events.create] push notify failed (non-fatal)", e);
-  }
+  })();
 
   revalidatePath("/app/events");
   revalidatePath("/admin/events");

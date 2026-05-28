@@ -116,46 +116,49 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
     console.warn("[createMeetupAction] main-chat broadcast failed (non-fatal)", e);
   }
 
-  // Push notify all approved members about the new meetup (skip the host).
-  try {
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    );
-    const [{ data: approved }, { data: hostProfile }] = await Promise.all([
-      admin.from("profiles").select("id").eq("status", "approved"),
-      admin.from("profiles").select("full_name").eq("id", me.id).maybeSingle(),
-    ]);
-    if (approved && approved.length > 0) {
-      const hostName = hostProfile?.full_name ?? "A brother";
-      const whenLabel = new Date(whenAt).toLocaleString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      const pushBody = `${title} · ${whenLabel}${locationName ? ` · ${locationName}` : ""}`;
-      await Promise.all(
-        approved
-          .filter((p) => p.id !== me.id)
-          .map((p) =>
-            sendPushToUser({
-              userId: p.id,
-              payload: {
-                title: `${hostName} is hosting a meetup`,
-                body: pushBody,
-                url: `/app/meetups/${m.id}`,
-                tag: `meetup:${m.id}`,
-              },
-            }),
-          ),
+  // Fire-and-forget push fan-out — the host shouldn't wait for every
+  // recipient's push to deliver before being redirected to the meetup.
+  void (async () => {
+    try {
+      const admin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } },
       );
+      const [{ data: approved }, { data: hostProfile }] = await Promise.all([
+        admin.from("profiles").select("id").eq("status", "approved"),
+        admin.from("profiles").select("full_name").eq("id", me.id).maybeSingle(),
+      ]);
+      if (approved && approved.length > 0) {
+        const hostName = hostProfile?.full_name ?? "A brother";
+        const whenLabel = new Date(whenAt).toLocaleString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        const pushBody = `${title} · ${whenLabel}${locationName ? ` · ${locationName}` : ""}`;
+        await Promise.all(
+          approved
+            .filter((p) => p.id !== me.id)
+            .map((p) =>
+              sendPushToUser({
+                userId: p.id,
+                payload: {
+                  title: `${hostName} is hosting a meetup`,
+                  body: pushBody,
+                  url: `/app/meetups/${m.id}`,
+                  tag: `meetup:${m.id}`,
+                },
+              }),
+            ),
+        );
+      }
+    } catch (e) {
+      console.warn("[createMeetupAction] push notify failed (non-fatal)", e);
     }
-  } catch (e) {
-    console.warn("[createMeetupAction] push notify failed (non-fatal)", e);
-  }
+  })();
 
   revalidatePath("/app/meetups");
   revalidatePath("/app/home");

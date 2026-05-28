@@ -27,7 +27,6 @@ export default async function HomePage() {
     { data: nextEvent },
     pendingRes,
     { count: unread },
-    { data: members },
     { data: joinedGroups },
     postsRes,
   ] = await Promise.all([
@@ -51,12 +50,9 @@ export default async function HomePage() {
       .select("*", { count: "exact", head: true })
       .eq("user_id", profile.id)
       .eq("read", false),
-    supabase
-      .from("profiles")
-      .select("id, full_name, username")
-      .eq("status", "approved")
-      .neq("id", profile.id)
-      .order("full_name"),
+    // Mention picker now fetches on-demand via searchMembersForMention,
+    // so we no longer ship the full approved-member directory on every
+    // home render. This keeps the page light as the community grows.
     supabase
       .from("group_members")
       .select("group:groups(id, name)")
@@ -186,13 +182,10 @@ export default async function HomePage() {
     })
     .filter(Boolean) as { id: string; name: string }[];
 
-  const mentionable = (members ?? [])
-    .filter((m: any) => m.username)
-    .map((m: any) => ({
-      id: m.id,
-      full_name: m.full_name,
-      username: m.username,
-    }));
+  // Empty static list — composer/comment input now fetches @mention
+  // matches lazily via searchMembersForMention when the user actually
+  // types `@`. Saves a directory-sized query on every home render.
+  const mentionable: { id: string; full_name: string; username: string }[] = [];
 
   return (
     <PullToRefresh>

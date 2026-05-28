@@ -44,6 +44,21 @@ export function ThreadChatClient({
   // When a realtime INSERT from me arrives, we shift the front of the queue
   // and replace that placeholder with the real row.
   const pendingLocalIdsRef = useRef<string[]>([]);
+  // Local author cache so realtime inserts don't hit the DB for someone
+  // we've already seen in this thread. Seeded from initialMessages.
+  const authorCacheRef = useRef<
+    Map<string, { full_name: string; profile_photo_url: string | null }>
+  >(
+    new Map(
+      initialMessages.map((m) => [
+        m.author_id,
+        {
+          full_name: m.author_name,
+          profile_photo_url: m.author_photo ?? null,
+        },
+      ]),
+    ),
+  );
 
   // Auto-scroll to bottom when new messages arrive.
   useEffect(() => {
@@ -118,12 +133,22 @@ export function ThreadChatClient({
             return;
           }
 
-          // Otherwise it's from someone else — fetch their profile + append.
-          const { data: author } = await supabase
-            .from("profiles")
-            .select("id, full_name, profile_photo_url")
-            .eq("id", m.author_id)
-            .maybeSingle();
+          // Otherwise it's from someone else. Use the local author cache
+          // so we don't fire a profile fetch for every realtime message
+          // (a busy thread used to hit the DB once per incoming line).
+          let cached = authorCacheRef.current.get(m.author_id);
+          if (!cached) {
+            const { data: author } = await supabase
+              .from("profiles")
+              .select("id, full_name, profile_photo_url")
+              .eq("id", m.author_id)
+              .maybeSingle();
+            cached = {
+              full_name: author?.full_name ?? "Brother",
+              profile_photo_url: author?.profile_photo_url ?? null,
+            };
+            authorCacheRef.current.set(m.author_id, cached);
+          }
           setMessages((prev) => [
             ...prev,
             {
@@ -133,8 +158,8 @@ export function ThreadChatClient({
               media_type: (m.media_type ?? "none") as "none" | "image" | "video",
               created_at: m.created_at,
               author_id: m.author_id,
-              author_name: author?.full_name ?? "Brother",
-              author_photo: author?.profile_photo_url ?? null,
+              author_name: cached.full_name,
+              author_photo: cached.profile_photo_url,
               is_me: false,
             },
           ]);

@@ -55,58 +55,64 @@ export async function sendThreadMessageAction(
   });
   if (error) return { error: error.message };
 
-  // Notify all OTHER thread members (skip self).
-  try {
-    const { data: thread } = await supabase
-      .from("threads")
-      .select("kind, title, group_id")
-      .eq("id", threadId)
-      .maybeSingle();
-    const { data: members } = await supabase
-      .from("thread_members")
-      .select("user_id, muted, profile:profiles!thread_members_user_id_fkey(id, full_name)")
-      .eq("thread_id", threadId);
-    const { data: meProfile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", me.id)
-      .maybeSingle();
+  // Fire-and-forget push fan-out. The action returns the moment the
+  // message insert is acknowledged so the sender's bubble appears
+  // instantly; push delivery happens in the background. Wrapped in an
+  // IIFE that owns its own try/catch so unhandled rejections can't
+  // crash the request.
+  void (async () => {
+    try {
+      const { data: thread } = await supabase
+        .from("threads")
+        .select("kind, title, group_id")
+        .eq("id", threadId)
+        .maybeSingle();
+      const { data: members } = await supabase
+        .from("thread_members")
+        .select("user_id, muted, profile:profiles!thread_members_user_id_fkey(id, full_name)")
+        .eq("thread_id", threadId);
+      const { data: meProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", me.id)
+        .maybeSingle();
 
-    const senderName = meProfile?.full_name ?? "A brother";
-    const previewBody = mediaUrl
-      ? mediaType === "image"
-        ? "📷 Photo"
-        : "🎥 Video"
-      : body.length > 120
-        ? `${body.slice(0, 117)}…`
-        : body;
+      const senderName = meProfile?.full_name ?? "A brother";
+      const previewBody = mediaUrl
+        ? mediaType === "image"
+          ? "📷 Photo"
+          : "🎥 Video"
+        : body.length > 120
+          ? `${body.slice(0, 117)}…`
+          : body;
 
-    const isGroup = thread?.kind === "group" || thread?.kind === "event";
-    const url =
-      thread?.kind === "group" && thread.group_id
-        ? `/app/groups/${thread.group_id}/chat`
-        : `/app/dms/${threadId}`;
-    const title = isGroup ? `${senderName} · ${thread?.title ?? "Group"}` : senderName;
+      const isGroup = thread?.kind === "group" || thread?.kind === "event";
+      const url =
+        thread?.kind === "group" && thread.group_id
+          ? `/app/groups/${thread.group_id}/chat`
+          : `/app/dms/${threadId}`;
+      const title = isGroup ? `${senderName} · ${thread?.title ?? "Group"}` : senderName;
 
-    await Promise.all(
-      (members ?? [])
-        .filter((m: any) => m.user_id !== me.id && !m.muted)
-        .map((m: any) =>
-          sendPushToUser({
-            userId: m.user_id,
-            payload: {
-              title,
-              body: previewBody,
-              url,
-              tag: `thread:${threadId}`,
-              renotify: true,
-            },
-          }),
-        ),
-    );
-  } catch (e) {
-    console.warn("[dm] push notify failed (non-fatal)", e);
-  }
+      await Promise.all(
+        (members ?? [])
+          .filter((m: any) => m.user_id !== me.id && !m.muted)
+          .map((m: any) =>
+            sendPushToUser({
+              userId: m.user_id,
+              payload: {
+                title,
+                body: previewBody,
+                url,
+                tag: `thread:${threadId}`,
+                renotify: true,
+              },
+            }),
+          ),
+      );
+    } catch (e) {
+      console.warn("[dm] push notify failed (non-fatal)", e);
+    }
+  })();
 
   revalidatePath(`/app/dms/${threadId}`);
   return {};

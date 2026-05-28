@@ -6,6 +6,51 @@ import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser } from "@/lib/push/send";
 
 /**
+ * On-demand mention search. Called by the feed composer / comment input
+ * when the user types `@`. Replaces the old "fetch every approved member
+ * on page load and filter client-side" pattern, which dragged on the home
+ * feed as the community grew.
+ *
+ * Returns up to 8 username-matching approved members. Empty query → empty
+ * list (nothing to filter against, and we don't want to leak a directory).
+ */
+export async function searchMembersForMention(
+  query: string,
+): Promise<{ id: string; full_name: string; username: string }[]> {
+  const q = (query ?? "").trim().toLowerCase();
+  if (q.length === 0) return [];
+
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return [];
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, username")
+    .eq("status", "approved")
+    .neq("id", me.id)
+    .not("username", "is", null)
+    .ilike("username", `${q}%`)
+    .order("full_name")
+    .limit(8);
+
+  return (data ?? []).filter((r) => r.username) as {
+    id: string;
+    full_name: string;
+    username: string;
+  }[];
+}
+
+/**
  * Create a feed post. Called from the FeedComposer client component
  * via the onSubmit prop. Accepts a FormData with:
  *   - kind   ('post' | 'job' | 'need' | 'announcement')
@@ -84,29 +129,35 @@ export async function createPostAction(
           mentioned_user_id: m.id,
         })),
       );
-      // Push to each mentioned member (skip self).
-      const { data: meProfile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", me.id)
-        .maybeSingle();
-      const senderName = meProfile?.full_name ?? "A brother";
-      const preview = body.length > 100 ? `${body.slice(0, 97)}…` : body;
-      await Promise.all(
-        mentioned
-          .filter((m) => m.id !== me.id)
-          .map((m) =>
-            sendPushToUser({
-              userId: m.id,
-              payload: {
-                title: `${senderName} mentioned you`,
-                body: preview,
-                url: `/app/home`,
-                tag: `mention:${post.id}`,
-              },
-            }),
-          ),
-      );
+      // Fire-and-forget push to mentioned brothers so the poster doesn't
+      // wait for each push delivery before the action returns.
+      const mentionedIds = mentioned.filter((m) => m.id !== me.id).map((m) => m.id);
+      void (async () => {
+        try {
+          const { data: meProfile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", me.id)
+            .maybeSingle();
+          const senderName = meProfile?.full_name ?? "A brother";
+          const preview = body.length > 100 ? `${body.slice(0, 97)}…` : body;
+          await Promise.all(
+            mentionedIds.map((id) =>
+              sendPushToUser({
+                userId: id,
+                payload: {
+                  title: `${senderName} mentioned you`,
+                  body: preview,
+                  url: `/app/home`,
+                  tag: `mention:${post.id}`,
+                },
+              }),
+            ),
+          );
+        } catch (e) {
+          console.warn("[post.create] mention push failed (non-fatal)", e);
+        }
+      })();
     }
   }
 
@@ -212,23 +263,32 @@ export async function addCommentAction(
           mentioned_user_id: m.id,
         })),
       );
+      // Fire-and-forget push so the commenter sees their reply land
+      // instantly while pushes deliver in the background.
+      const mentionedIds = mentioned.filter((m) => m.id !== me.id).map((m) => m.id);
+      const senderName = me.full_name;
       const preview =
         trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
-      await Promise.all(
-        mentioned
-          .filter((m) => m.id !== me.id)
-          .map((m) =>
-            sendPushToUser({
-              userId: m.id,
-              payload: {
-                title: `${me.full_name} mentioned you`,
-                body: preview,
-                url: "/app/home",
-                tag: `mention-comment:${row.id}`,
-              },
-            }),
-          ),
-      );
+      const rowId = row.id;
+      void (async () => {
+        try {
+          await Promise.all(
+            mentionedIds.map((id) =>
+              sendPushToUser({
+                userId: id,
+                payload: {
+                  title: `${senderName} mentioned you`,
+                  body: preview,
+                  url: "/app/home",
+                  tag: `mention-comment:${rowId}`,
+                },
+              }),
+            ),
+          );
+        } catch (e) {
+          console.warn("[comment.add] mention push failed (non-fatal)", e);
+        }
+      })();
     }
   }
 
