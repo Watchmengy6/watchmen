@@ -65,7 +65,47 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
 
   await awardPoints({ userId: me.id, action: "meetup_created", meta: { meetup_id: m.id } });
 
+  // Auto-broadcast: post to feed wall + drop a message in the main chat
+  // so brothers see the meetup in their two main surfaces. Non-fatal —
+  // if these fail the meetup itself still exists.
+  try {
+    await supabase.from("posts").insert({
+      author_id: me.id,
+      kind: "post",
+      body: `Hosting a meetup: ${title}${locationName ? ` at ${locationName}` : ""}`,
+      tagged_meetup_id: m.id,
+    });
+  } catch (e) {
+    console.warn("[createMeetupAction] feed post insert failed (non-fatal)", e);
+  }
+
+  try {
+    const { data: mainChat } = await supabase
+      .from("chats")
+      .select("id")
+      .eq("type", "main")
+      .maybeSingle();
+    if (mainChat) {
+      const whenLabel = new Date(whenAt).toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      await supabase.from("messages").insert({
+        chat_id: mainChat.id,
+        user_id: me.id,
+        content: `New meetup: ${title}${locationName ? ` · ${locationName}` : ""} · ${whenLabel}\nRSVP: /app/meetups/${m.id}`,
+      });
+    }
+  } catch (e) {
+    console.warn("[createMeetupAction] main-chat broadcast failed (non-fatal)", e);
+  }
+
   revalidatePath("/app/meetups");
+  revalidatePath("/app/home");
+  revalidatePath("/app/chat");
   redirect(`/app/meetups/${m.id}`);
 }
 

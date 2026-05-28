@@ -98,22 +98,64 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
 
   if (!title || !event_date) return { error: "Title and date are required." };
 
-  const { error } = await supabase.from("events").insert({
-    title,
-    description,
-    event_date,
-    start_time,
-    end_time,
-    location_name,
-    address,
-    image_url,
-    latitude: latitudeStr ? Number(latitudeStr) : null,
-    longitude: longitudeStr ? Number(longitudeStr) : null,
-    created_by_user_id: profile.id,
-    status: "published",
-    kind,
-  });
-  if (error) return { error: error.message };
+  const { data: insertedEvent, error } = await supabase
+    .from("events")
+    .insert({
+      title,
+      description,
+      event_date,
+      start_time,
+      end_time,
+      location_name,
+      address,
+      image_url,
+      latitude: latitudeStr ? Number(latitudeStr) : null,
+      longitude: longitudeStr ? Number(longitudeStr) : null,
+      created_by_user_id: profile.id,
+      status: "published",
+      kind,
+    })
+    .select("id")
+    .single();
+  if (error || !insertedEvent) return { error: error?.message ?? "Insert failed." };
+
+  // Auto-broadcast to feed wall + main chat so the new event surfaces
+  // where brothers actually look. Non-fatal — if these fail the event
+  // still exists.
+  try {
+    await supabase.from("posts").insert({
+      author_id: profile.id,
+      kind: "announcement",
+      body: `New ${kind === "sponsored" ? "sponsored " : ""}event: ${title}${location_name ? ` at ${location_name}` : ""}`,
+      tagged_event_id: insertedEvent.id,
+      media_url: image_url,
+      media_type: image_url ? "image" : "none",
+    });
+  } catch (e) {
+    console.warn("[createEventAction] feed post insert failed (non-fatal)", e);
+  }
+
+  try {
+    const { data: mainChat } = await supabase
+      .from("chats")
+      .select("id")
+      .eq("type", "main")
+      .maybeSingle();
+    if (mainChat) {
+      const dateLabel = new Date(event_date + "T00:00:00").toLocaleDateString(
+        "en-US",
+        { weekday: "short", month: "short", day: "numeric" },
+      );
+      const timeLabel = start_time ? ` · ${start_time.slice(0, 5)}` : "";
+      await supabase.from("messages").insert({
+        chat_id: mainChat.id,
+        user_id: profile.id,
+        content: `New event: ${title} · ${dateLabel}${timeLabel}${location_name ? ` · ${location_name}` : ""}\nRSVP: /app/events/${insertedEvent.id}`,
+      });
+    }
+  } catch (e) {
+    console.warn("[createEventAction] main-chat broadcast failed (non-fatal)", e);
+  }
 
   // Push notify all approved members about the new event.
   try {
@@ -157,5 +199,7 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
 
   revalidatePath("/app/events");
   revalidatePath("/admin/events");
+  revalidatePath("/app/home");
+  revalidatePath("/app/chat");
   return { success: true };
 }
