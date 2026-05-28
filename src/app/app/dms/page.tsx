@@ -25,6 +25,12 @@ export default async function DmsPage({
     .eq("user_id", profile.id);
   const threadIds = (myThreadRows ?? []).map((r: any) => r.thread_id);
 
+  // Build a lookup: my last_read_at per thread (null = never opened).
+  const lastReadMap = new Map<string, string | null>();
+  (myThreadRows ?? []).forEach((r: any) => {
+    lastReadMap.set(r.thread_id, r.last_read_at ?? null);
+  });
+
   const { data: threads } = threadIds.length
     ? await supabase
         .from("threads")
@@ -32,6 +38,14 @@ export default async function DmsPage({
         .in("id", threadIds)
         .order("last_message_at", { ascending: false, nullsFirst: false })
     : { data: [] };
+
+  // A thread is "unread" when it has any message and I haven't read up to it.
+  function isUnread(t: any): boolean {
+    if (!t.last_message_at) return false;
+    const lastRead = lastReadMap.get(t.id);
+    if (!lastRead) return true;
+    return new Date(t.last_message_at).getTime() > new Date(lastRead).getTime();
+  }
 
   // For DM threads, fetch the *other* member's name + avatar.
   const dmThreads = (threads ?? []).filter((t: any) => t.kind === "dm");
@@ -53,9 +67,10 @@ export default async function DmsPage({
     });
   }
 
+  // Tab badges show UNREAD thread count, not total.
   const counts = {
-    private: dmThreads.length,
-    groups: groupThreads.length,
+    private: dmThreads.filter(isUnread).length,
+    groups: groupThreads.filter(isUnread).length,
   };
 
   const listForTab = activeTab === "groups" ? groupThreads : dmThreads;
@@ -110,6 +125,7 @@ export default async function DmsPage({
               activeTab === "groups" && t.group_id
                 ? `/app/groups/${t.group_id}/chat`
                 : `/app/dms/${t.id}`;
+            const unread = isUnread(t);
             return (
               <Link
                 key={t.id}
@@ -123,19 +139,40 @@ export default async function DmsPage({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-3">
-                    <div className="text-white text-[15px] font-semibold truncate">
+                    <div
+                      className={
+                        unread
+                          ? "text-white text-[15px] font-semibold truncate"
+                          : "text-ink-100 text-[15px] truncate"
+                      }
+                    >
                       {title}
                     </div>
                     {t.last_message_at ? (
-                      <div className="text-[11px] text-ink-400 shrink-0">
+                      <div
+                        className={
+                          unread
+                            ? "text-[11px] text-gold-300 shrink-0 font-semibold"
+                            : "text-[11px] text-ink-400 shrink-0"
+                        }
+                      >
                         {relativeTime(t.last_message_at)}
                       </div>
                     ) : null}
                   </div>
-                  <div className="text-ink-300 text-[13.5px] truncate mt-0.5">
+                  <div
+                    className={
+                      unread
+                        ? "text-ink-100 text-[13.5px] truncate mt-0.5"
+                        : "text-ink-400 text-[13.5px] truncate mt-0.5"
+                    }
+                  >
                     {t.last_message_preview ?? "No messages yet."}
                   </div>
                 </div>
+                {unread ? (
+                  <span className="h-2.5 w-2.5 rounded-full bg-gold-400 shrink-0" aria-label="Unread" />
+                ) : null}
               </Link>
             );
           })
@@ -150,6 +187,7 @@ export default async function DmsPage({
 }
 
 function Pill({ href, label, count, active }: { href: string; label: string; count: number; active: boolean }) {
+  // Only render an unread count when > 0. When 0, the tab is plain text.
   return (
     <Link
       href={href}
@@ -164,9 +202,10 @@ function Pill({ href, label, count, active }: { href: string; label: string; cou
         <span
           className={
             active
-              ? "h-5 min-w-5 px-1.5 rounded-full bg-black/15 text-black text-[10.5px] font-bold inline-flex items-center justify-center"
+              ? "h-5 min-w-5 px-1.5 rounded-full bg-gold-400 text-black text-[10.5px] font-bold inline-flex items-center justify-center"
               : "h-5 min-w-5 px-1.5 rounded-full bg-gold-400 text-black text-[10.5px] font-bold inline-flex items-center justify-center"
           }
+          aria-label={`${count} unread`}
         >
           {count}
         </span>

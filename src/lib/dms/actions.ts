@@ -112,6 +112,30 @@ export async function sendThreadMessageAction(
   return {};
 }
 
+/**
+ * Stamp the current user's last_read_at on a thread to "now()". Called
+ * when a user opens a thread so the inbox unread badge clears.
+ */
+export async function markThreadReadAction(threadId: string): Promise<void> {
+  if (!threadId) return;
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me) return;
+  await supabase
+    .from("thread_members")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("thread_id", threadId)
+    .eq("user_id", me.id);
+}
+
 /** Mute / unmute a thread for the current user. */
 export async function muteThreadAction(formData: FormData) {
   const threadId = String(formData.get("thread_id") ?? "").trim();

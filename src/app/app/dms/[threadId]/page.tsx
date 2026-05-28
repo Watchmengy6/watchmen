@@ -4,6 +4,7 @@ import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
 import { ThreadChatClient } from "./ThreadChatClient";
+import { markThreadReadAction } from "@/lib/dms/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,10 @@ export default async function DmThreadPage({
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
     .limit(200);
+
+  // Mark this thread as read — clears the inbox unread badge.
+  // Fire-and-forget; safe to await since it's a quick UPDATE.
+  await markThreadReadAction(thread.id);
 
   const adapted = (messages ?? []).map((m: any) => {
     const a = Array.isArray(m.author) ? m.author[0] : m.author;

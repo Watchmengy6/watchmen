@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ThreadChatClient } from "@/app/app/dms/[threadId]/ThreadChatClient";
+import { markThreadReadAction } from "@/lib/dms/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,9 @@ export default async function GroupChatPage({
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
     .limit(200);
+
+  // Mark this group's thread as read for the current member.
+  await markThreadReadAction(thread.id);
 
   const adapted = (messages ?? []).map((m: any) => {
     const a = Array.isArray(m.author) ? m.author[0] : m.author;

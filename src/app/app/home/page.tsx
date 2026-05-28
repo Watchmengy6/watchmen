@@ -3,6 +3,7 @@ import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { FeedComposer } from "@/components/feed/FeedComposer";
 import { FeedPostClient } from "./FeedPostClient";
+import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { Logo } from "@/components/brand/Logo";
 import { AdminPill } from "@/components/admin/AdminPill";
 import { fmtTime } from "@/lib/utils/date";
@@ -193,6 +194,7 @@ export default async function HomePage() {
     }));
 
   return (
+    <PullToRefresh>
     <div className="min-h-[100dvh] bg-ink-900 pb-28 relative">
       {/* sticky top bar */}
       <div
@@ -307,5 +309,6 @@ export default async function HomePage() {
         </p>
       </div>
     </div>
+    </PullToRefresh>
   );
 }
