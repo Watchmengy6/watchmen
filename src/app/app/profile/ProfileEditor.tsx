@@ -30,6 +30,11 @@ interface Defaults {
   phone: string;
   profile_photo_url: string | null;
   interests: string[];
+  venmo_username: string;
+  cashapp_username: string;
+  birthday: string;
+  spouse: string;
+  kids: string;
 }
 
 export function ProfileEditor({
@@ -104,6 +109,56 @@ export function ProfileEditor({
           <div>
             <Label>Phone (private)</Label>
             <Input name="phone" defaultValue={defaults.phone} type="tel" />
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Pay handles — render as clickable pills on member profiles */}
+      <Card>
+        <CardBody className="space-y-4">
+          <div>
+            <Label>Venmo username</Label>
+            <Input
+              name="venmo_username"
+              defaultValue={defaults.venmo_username}
+              placeholder="Aaron-Pilkington"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </div>
+          <div>
+            <Label>CashApp $tag</Label>
+            <Input
+              name="cashapp_username"
+              defaultValue={defaults.cashapp_username}
+              placeholder="aaronpilk"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Family / personal */}
+      <Card>
+        <CardBody className="space-y-4">
+          <div>
+            <Label>Birthday</Label>
+            <Input name="birthday" type="date" defaultValue={defaults.birthday} />
+          </div>
+          <div>
+            <Label>Spouse / partner</Label>
+            <Input name="spouse" defaultValue={defaults.spouse} placeholder="Lauren" />
+          </div>
+          <div>
+            <Label>Kids</Label>
+            <Input
+              name="kids"
+              defaultValue={defaults.kids}
+              placeholder="Cole (4), Ava (2)"
+            />
           </div>
         </CardBody>
       </Card>

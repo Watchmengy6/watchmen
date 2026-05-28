@@ -37,6 +37,11 @@ export default async function ProfilePage() {
           phone: profile.phone ?? "",
           profile_photo_url: profile.profile_photo_url ?? null,
           interests: Array.isArray(profile.interests) ? profile.interests : [],
+          venmo_username: (profile as any).venmo_username ?? "",
+          cashapp_username: (profile as any).cashapp_username ?? "",
+          birthday: (profile as any).birthday ?? "",
+          spouse: (profile as any).spouse ?? "",
+          kids: (profile as any).kids ?? "",
         }}
       />
 

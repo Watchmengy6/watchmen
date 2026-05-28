@@ -19,6 +19,11 @@ export async function updateProfileAction(_prev: unknown, formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim();
   const profile_photo_url = String(formData.get("profile_photo_url") ?? "").trim();
   const usernameRaw = String(formData.get("username") ?? "").trim().toLowerCase();
+  const venmo = String(formData.get("venmo_username") ?? "").trim().replace(/^@/, "");
+  const cashapp = String(formData.get("cashapp_username") ?? "").trim().replace(/^\$/, "");
+  const birthday = String(formData.get("birthday") ?? "").trim();
+  const spouse = String(formData.get("spouse") ?? "").trim();
+  const kids = String(formData.get("kids") ?? "").trim();
   const interests = (formData.getAll("interests") as string[]).filter((i) =>
     INTERESTS.includes(i),
   );
@@ -54,6 +59,11 @@ export async function updateProfileAction(_prev: unknown, formData: FormData) {
     phone: phone || null,
     profile_photo_url: profile_photo_url || null,
     interests,
+    venmo_username: venmo || null,
+    cashapp_username: cashapp || null,
+    birthday: birthday || null,
+    spouse: spouse || null,
+    kids: kids || null,
   };
   if (username) update.username = username;
 
