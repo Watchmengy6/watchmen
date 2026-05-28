@@ -2,12 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-
-const INTERESTS_WHITELIST = [
-  "Marketing","Real estate","Fitness","Pickleball","Sports","Business",
-  "Investing","Cars","Watches","Church","Networking","Entrepreneurship",
-  "Construction","Tech","Content creation","Golf","Fishing","Boating",
-];
+import { INTERESTS } from "./interests";
 
 export async function updateProfileAction(_prev: unknown, formData: FormData) {
   const supabase = supabaseServer();
@@ -25,7 +20,7 @@ export async function updateProfileAction(_prev: unknown, formData: FormData) {
   const profile_photo_url = String(formData.get("profile_photo_url") ?? "").trim();
   const usernameRaw = String(formData.get("username") ?? "").trim().toLowerCase();
   const interests = (formData.getAll("interests") as string[]).filter((i) =>
-    INTERESTS_WHITELIST.includes(i),
+    INTERESTS.includes(i),
   );
 
   if (!full_name) return { error: "Name is required." };
@@ -73,5 +68,3 @@ export async function updateProfileAction(_prev: unknown, formData: FormData) {
   revalidatePath("/app/home");
   return { success: true } as const;
 }
-
-export const INTERESTS = INTERESTS_WHITELIST;

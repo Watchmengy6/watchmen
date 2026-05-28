@@ -206,10 +206,11 @@ export function ChatRoom({
   }, [enriched, polls]);
 
   return (
-    // Flex column that fills the viewport minus the top header (~3.75rem)
-    // and reserves room for the bottom nav (~5rem). Input sticks above the nav.
-    <div className="flex flex-col h-[calc(100dvh-3.75rem-5rem)]">
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-2 pt-2">
+    // Fills the viewport minus the bottom nav (5rem). The page passes its
+    // sticky header as children at the top of this container; the scroller
+    // and message input fill the remaining space.
+    <div className="flex flex-col h-[calc(100dvh-5rem)]">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 pt-3">
         {timeline.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             {emptyState ?? (

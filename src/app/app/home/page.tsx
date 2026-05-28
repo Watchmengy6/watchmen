@@ -193,7 +193,7 @@ export default async function HomePage() {
     }));
 
   return (
-    <div className="min-h-[100dvh] bg-ink-900 pb-28 relative -mx-4 sm:mx-0">
+    <div className="min-h-[100dvh] bg-ink-900 pb-28 relative">
       {/* sticky top bar */}
       <div
         className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"

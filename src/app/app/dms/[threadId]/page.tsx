@@ -67,7 +67,7 @@ export default async function DmThreadPage({
   });
 
   return (
-    <div className="min-h-[100dvh] bg-ink-900 flex flex-col -mx-4 sm:mx-0">
+    <div className="min-h-[100dvh] bg-ink-900 flex flex-col">
       <div
         className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}

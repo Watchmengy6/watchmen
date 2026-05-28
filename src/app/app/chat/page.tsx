@@ -70,7 +70,7 @@ export default async function MainChatPage() {
   }));
 
   return (
-    <div className="relative -mx-4 sm:mx-0">
+    <div className="relative">
       <div
         className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}

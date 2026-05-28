@@ -8,7 +8,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 text-white pb-20 overflow-x-hidden">
-      <main className="mx-auto max-w-screen-sm overflow-x-hidden">{children}</main>
+      {/* main has NO horizontal padding so pages can fully control their own
+          inset (and use full width for sticky headers / hero cards). Pages
+          should add px-4 or px-5 to their content as needed. */}
+      <main className="mx-auto w-full max-w-screen-sm">{children}</main>
       <BottomNav
         profileLabel={
           profile.full_name

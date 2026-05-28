@@ -6,7 +6,8 @@ import { Input, Label, Textarea } from "@/components/ui/Input";
 import { Card, CardBody } from "@/components/ui/Card";
 import { AvatarUpload } from "@/components/profile/AvatarUpload";
 import { InterestChips } from "@/components/profile/InterestChips";
-import { INTERESTS, updateProfileAction } from "@/lib/profile/actions";
+import { updateProfileAction } from "@/lib/profile/actions";
+import { INTERESTS } from "@/lib/profile/interests";
 import { useToast } from "@/components/ui/Toast";
 import { useEffect } from "react";
 
