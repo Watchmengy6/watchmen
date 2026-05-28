@@ -68,7 +68,10 @@ export default async function HomePage() {
          author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company),
          tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
          tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
-         tagged_meetup:meetups!posts_tagged_meetup_id_fkey(id, title, when_at, location_name)`,
+         tagged_meetup:meetups!posts_tagged_meetup_id_fkey(
+           id, title, when_at, location_name,
+           host:profiles!meetups_host_user_id_fkey(id, full_name, profile_photo_url)
+         )`,
       )
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -149,12 +152,15 @@ export default async function HomePage() {
             hostPhoto: null,
           }
         : tm
-          ? {
-              kind: "meetup" as const,
-              data: tm,
-              hostName: null,
-              hostPhoto: null,
-            }
+          ? (() => {
+              const host = Array.isArray(tm.host) ? tm.host[0] : tm.host;
+              return {
+                kind: "meetup" as const,
+                data: tm,
+                hostName: host?.full_name ?? null,
+                hostPhoto: host?.profile_photo_url ?? null,
+              };
+            })()
           : null,
       likes: likeCount.get(p.id) ?? 0,
       liked_by_me: myLikes.has(p.id),
