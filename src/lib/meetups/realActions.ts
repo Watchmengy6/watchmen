@@ -96,7 +96,9 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
       await supabase.from("messages").insert({
         chat_id: mainChat.id,
         user_id: me.id,
-        content: `New meetup: ${title}${locationName ? ` · ${locationName}` : ""} · ${whenLabel}\nRSVP: /app/meetups/${m.id}`,
+        // The chat renderer auto-converts /app/meetups/<id> into a "View
+        // meetup →" pill, so we don't have to write a friendly label here.
+        content: `New meetup: ${title}${locationName ? ` · ${locationName}` : ""} · ${whenLabel} /app/meetups/${m.id}`,
       });
     }
   } catch (e) {

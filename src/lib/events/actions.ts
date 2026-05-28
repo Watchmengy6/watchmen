@@ -150,7 +150,9 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
       await supabase.from("messages").insert({
         chat_id: mainChat.id,
         user_id: profile.id,
-        content: `New event: ${title} · ${dateLabel}${timeLabel}${location_name ? ` · ${location_name}` : ""}\nRSVP: /app/events/${insertedEvent.id}`,
+        // The chat renderer auto-converts /app/events/<id> into a "View
+        // event →" pill, so the URL doubles as the call-to-action.
+        content: `New event: ${title} · ${dateLabel}${timeLabel}${location_name ? ` · ${location_name}` : ""} /app/events/${insertedEvent.id}`,
       });
     }
   } catch (e) {

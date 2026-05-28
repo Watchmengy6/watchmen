@@ -1,9 +1,71 @@
 "use client";
 
+import Link from "next/link";
+import { Fragment } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { toggleReactionAction } from "@/lib/chat/actions";
 import { useTransition } from "react";
+
+/**
+ * Render a chat message body, converting any /app/meetups/<id>,
+ * /app/events/<id>, /app/groups/<id>, /app/members/<id> path into a
+ * clickable pill so we don't show raw UUIDs to the room. Also strips
+ * the redundant "RSVP:" / "Tap to RSVP:" prefix that precedes those
+ * links in our auto-broadcasts.
+ */
+function renderContent(content: string, mine: boolean) {
+  const lineEls: React.ReactNode[] = [];
+  const urlPattern = /\/app\/(meetups|events|groups|members)\/[\w-]+/g;
+  const labelFor = (kind: string) =>
+    kind === "meetups"
+      ? "View meetup"
+      : kind === "events"
+        ? "View event"
+        : kind === "groups"
+          ? "View group"
+          : "View profile";
+
+  content.split("\n").forEach((line, lineIdx) => {
+    // Pull off a leading "RSVP:" or "Tap to RSVP:" label so the chat
+    // bubble doesn't show two prompts back-to-back.
+    const stripped = line.replace(/^\s*(RSVP|Tap to RSVP|Tap)\s*:\s*/i, "");
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let matchIdx = 0;
+    for (const match of stripped.matchAll(urlPattern)) {
+      const start = match.index ?? 0;
+      if (start > lastIdx) parts.push(stripped.slice(lastIdx, start));
+      const url = match[0];
+      const kind = match[1];
+      parts.push(
+        <Link
+          key={`${lineIdx}-${matchIdx}`}
+          href={url}
+          className={cn(
+            "inline-block align-middle ml-1 px-2.5 h-6 leading-6 rounded-full text-[12px] font-semibold transition-colors",
+            mine
+              ? "bg-black/15 text-black hover:bg-black/25"
+              : "bg-gold-500/15 text-gold-200 hover:bg-gold-500/25",
+          )}
+        >
+          {labelFor(kind)} →
+        </Link>,
+      );
+      lastIdx = start + url.length;
+      matchIdx += 1;
+    }
+    if (lastIdx < stripped.length) parts.push(stripped.slice(lastIdx));
+    lineEls.push(
+      <Fragment key={lineIdx}>
+        {parts.length > 0 ? parts : stripped}
+        {lineIdx < content.split("\n").length - 1 ? <br /> : null}
+      </Fragment>,
+    );
+  });
+
+  return lineEls;
+}
 
 export type GroupPosition = "first" | "middle" | "last" | "only";
 
@@ -127,7 +189,9 @@ export function MessageBubble({
               />
             ) : null}
             {message.content ? (
-              <div className="whitespace-pre-wrap break-words">{message.content}</div>
+              <div className="whitespace-pre-wrap break-words">
+                {renderContent(message.content, mine)}
+              </div>
             ) : null}
           </div>
 
