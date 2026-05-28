@@ -20,9 +20,13 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   if (!title) return;
   if (!whenAtLocal) return;
 
-  // datetime-local comes in without timezone — interpret in the browser's TZ.
-  // Server can't know the user's TZ; we treat the string as local-then-UTC.
-  const whenAt = new Date(whenAtLocal).toISOString();
+  // datetime-local has no timezone. The client sends a `tz_offset` (e.g.
+  // "-04:00") via a hidden field on the form so we can construct the
+  // correct UTC moment regardless of the server's timezone.
+  const tzOffset = String(formData.get("tz_offset") ?? "").trim() || "+00:00";
+  // Normalize "2026-05-27T19:00" + "-04:00" → "2026-05-27T19:00:00-04:00".
+  const isoWithTz = `${whenAtLocal}${whenAtLocal.includes(":") && whenAtLocal.split(":").length === 2 ? ":00" : ""}${tzOffset}`;
+  const whenAt = new Date(isoWithTz).toISOString();
 
   const supabase = supabaseServer();
   const {

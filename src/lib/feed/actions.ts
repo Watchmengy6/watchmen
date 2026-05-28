@@ -64,11 +64,11 @@ export async function createPostAction(
   if (error) return { error: error.message };
 
   // Parse @mentions out of body and write to post_mentions.
-  // Usernames are always lowercased at write time, so we lowercase the
-  // mentions before lookup to make tagging case-insensitive.
+  // Usernames are always lowercased at write time and may contain hyphens
+  // (collision suffixes), so allow [\w-] and lowercase before lookup.
   const mentionedUsernames = Array.from(
     new Set(
-      (body.match(/@(\w+)/g) ?? []).map((s) => s.slice(1).toLowerCase()),
+      (body.match(/@([\w-]+)/g) ?? []).map((s) => s.slice(1).toLowerCase()),
     ),
   );
   if (mentionedUsernames.length > 0) {

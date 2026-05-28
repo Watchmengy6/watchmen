@@ -66,9 +66,10 @@ export function FeedComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // @ mention picker: opens when user types "@" and shows live-filtered members
+  // @ mention picker: opens when user types "@" and shows live-filtered members.
+  // Allow hyphens because the username backfill produces dash-suffixed handles.
   const mentionQuery = (() => {
-    const m = text.match(/@(\w*)$/);
+    const m = text.match(/@([\w-]*)$/);
     return m ? m[1] : null;
   })();
   const mentionMatches =
@@ -81,7 +82,7 @@ export function FeedComposer({
       : [];
 
   function insertMention(username: string) {
-    const newText = text.replace(/@(\w*)$/, `@${username} `);
+    const newText = text.replace(/@([\w-]*)$/, `@${username} `);
     setText(newText);
     textareaRef.current?.focus();
   }

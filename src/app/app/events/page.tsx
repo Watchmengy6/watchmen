@@ -16,13 +16,14 @@ export default async function EventsPage() {
       .from("events")
       .select("*")
       .gte("event_date", today)
-      .neq("status", "cancelled")
+      .eq("status", "published")
       .order("event_date", { ascending: true })
       .order("start_time", { ascending: true }),
     supabase
       .from("events")
       .select("*")
       .lt("event_date", today)
+      .in("status", ["published", "completed"])
       .order("event_date", { ascending: false })
       .limit(20),
   ]);

@@ -8,8 +8,11 @@ import Link from "next/link";
  * with a capturing group includes the matches, while MATCH_RE has no flags so
  * its .test() is stateless (avoids the classic /g + test lastIndex bug).
  */
-const SPLIT_RE = /(@[a-zA-Z0-9_]+)/g;
-const MATCH_RE = /^@[a-zA-Z0-9_]+$/;
+// Usernames can contain letters, digits, underscores, and hyphens
+// (the username backfill produces collision-suffixed handles like
+// `aaron-1a2b` so the dash must be in the character class).
+const SPLIT_RE = /(@[a-zA-Z0-9_-]+)/g;
+const MATCH_RE = /^@[a-zA-Z0-9_-]+$/;
 
 export function RichText({ text }: { text: string }) {
   if (!text) return null;
@@ -29,10 +32,11 @@ export function RichText({ text }: { text: string }) {
 
 function Mention({ handle }: { handle: string }) {
   // handle includes leading "@"; strip for the URL search param.
+  // /app/members already supports q (free-text search) so route there.
   const username = handle.replace(/^@/, "");
   return (
     <Link
-      href={`/app/members?u=${encodeURIComponent(username)}`}
+      href={`/app/members?q=${encodeURIComponent(username)}`}
       className="text-gold-300 font-semibold hover:text-gold-200"
     >
       {handle}

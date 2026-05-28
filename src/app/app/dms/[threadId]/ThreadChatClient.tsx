@@ -67,8 +67,38 @@ export function ThreadChatClient({
         },
         async (payload) => {
           const m: any = payload.new;
-          if (m.author_id === meId) return; // we already added our own optimistically
-          // Fetch author profile.
+          // If this insert is from ME, reconcile the optimistic local
+          // placeholder with the real row (so the real id replaces the
+          // local one and any server-side fields like edited_at land).
+          if (m.author_id === meId) {
+            setMessages((prev) => {
+              // Replace the most recent local placeholder with body match.
+              const idx = [...prev].reverse().findIndex(
+                (msg) =>
+                  msg.is_me &&
+                  msg.id.startsWith("local-") &&
+                  (msg.body === m.body || (m.media_url && msg.id.startsWith("local-"))),
+              );
+              if (idx === -1) return prev;
+              const realIdx = prev.length - 1 - idx;
+              const next = [...prev];
+              next[realIdx] = {
+                id: m.id,
+                body: m.body ?? "",
+                media_url: m.media_url ?? null,
+                media_type: (m.media_type ?? "none") as "none" | "image" | "video",
+                created_at: m.created_at,
+                author_id: m.author_id,
+                author_name: meName,
+                author_photo: meAvatar ?? null,
+                is_me: true,
+              };
+              return next;
+            });
+            return;
+          }
+
+          // Otherwise it's from someone else — fetch their profile + append.
           const { data: author } = await supabase
             .from("profiles")
             .select("id, full_name, profile_photo_url")
@@ -78,7 +108,9 @@ export function ThreadChatClient({
             ...prev,
             {
               id: m.id,
-              body: m.body,
+              body: m.body ?? "",
+              media_url: m.media_url ?? null,
+              media_type: (m.media_type ?? "none") as "none" | "image" | "video",
               created_at: m.created_at,
               author_id: m.author_id,
               author_name: author?.full_name ?? "Brother",
@@ -92,7 +124,7 @@ export function ThreadChatClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadId, meId]);
+  }, [threadId, meId, meName, meAvatar]);
 
   function send() {
     const body = text.trim();

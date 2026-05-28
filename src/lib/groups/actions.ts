@@ -122,11 +122,32 @@ export async function leaveGroupAction(formData: FormData) {
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me) return;
+
+  // Delete group membership. The
+  // sync_group_member_remove_from_thread trigger (migration 00011) will
+  // also remove this user from the group's thread_members row.
   await supabase
     .from("group_members")
     .delete()
     .eq("group_id", groupId)
     .eq("user_id", me.id);
+
+  // Belt-and-suspenders: also remove from the thread in case the trigger
+  // ever fails or hasn't migrated yet.
+  const { data: thread } = await supabase
+    .from("threads")
+    .select("id")
+    .eq("group_id", groupId)
+    .maybeSingle();
+  if (thread) {
+    await supabase
+      .from("thread_members")
+      .delete()
+      .eq("thread_id", thread.id)
+      .eq("user_id", me.id);
+  }
+
   revalidatePath(`/app/groups/${groupId}`);
   revalidatePath("/app/groups");
+  revalidatePath("/app/dms");
 }

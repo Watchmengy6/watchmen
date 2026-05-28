@@ -13,11 +13,11 @@ export default async function InviteLanding({
   params: { code: string };
 }) {
   const supabase = supabaseServer();
-  const { data: inviter } = await supabase
-    .from("profiles")
-    .select("id, full_name, profile_photo_url, occupation, status")
-    .eq("invite_code", params.code)
-    .maybeSingle();
+  // SECURITY DEFINER RPC — works for anon viewers (they can't read profiles directly).
+  const { data: inviterRows } = await supabase.rpc("get_invite_inviter", {
+    p_invite_code: params.code,
+  });
+  const inviter = inviterRows && inviterRows.length > 0 ? inviterRows[0] : null;
 
   if (!inviter || inviter.status !== "approved") {
     return (

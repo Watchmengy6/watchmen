@@ -65,26 +65,14 @@ export async function awardPoints(opts: {
       relatedId = opts.meta.comment_id;
     }
 
-    await supabase.from("points_ledger").insert({
-      user_id: opts.userId,
-      action_type: opts.action,
-      points,
-      related_entity_type: relatedType,
-      related_entity_id: relatedId,
+    // Atomic ledger insert + points_total bump (no read-modify-write race).
+    await supabase.rpc("award_points_rpc", {
+      p_user_id: opts.userId,
+      p_action: opts.action,
+      p_points: points,
+      p_related_type: relatedType,
+      p_related_id: relatedId,
     });
-
-    // Bump profile.points_total.
-    const { data: cur } = await supabase
-      .from("profiles")
-      .select("points_total")
-      .eq("id", opts.userId)
-      .maybeSingle();
-    if (cur) {
-      await supabase
-        .from("profiles")
-        .update({ points_total: (cur.points_total ?? 0) + points })
-        .eq("id", opts.userId);
-    }
   } catch (e) {
     console.warn("[awardPoints] failed (non-fatal)", e);
   }

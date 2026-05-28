@@ -11,11 +11,10 @@ export async function getCurrentUser() {
   } = await supabase.auth.getUser();
   if (!user) return { user: null, profile: null as Profile | null };
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
+  // Use the me_full() SECURITY DEFINER RPC so we can read email/phone/invite_code
+  // (which are revoked from the authenticated role on the profiles table).
+  const { data: rows } = await supabase.rpc("me_full");
+  const profile = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 
   return { user, profile: (profile ?? null) as Profile | null };
 }
