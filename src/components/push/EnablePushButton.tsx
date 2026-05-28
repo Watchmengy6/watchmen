@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   savePushSubscriptionAction,
   removePushSubscriptionAction,
+  sendTestPushAction,
 } from "@/lib/push/actions";
 import { useToast } from "@/components/ui/Toast";
 
@@ -162,9 +163,28 @@ export function EnablePushButton() {
   }
   if (state === "on") {
     return (
-      <button onClick={disable} className={`${baseBtn} bg-ink-800 hairline text-ink-200`}>
-        Notifications on · tap to disable
-      </button>
+      <div className="space-y-2">
+        <button onClick={disable} className={`${baseBtn} bg-ink-800 hairline text-ink-200`}>
+          Notifications on · tap to disable
+        </button>
+        <button
+          onClick={async () => {
+            const r = await sendTestPushAction();
+            if (r?.error) {
+              push({ title: "Test failed", body: r.error, variant: "error" });
+            } else {
+              push({
+                title: "Test sent",
+                body: `${r.sent ?? 0} device${(r.sent ?? 0) === 1 ? "" : "s"} · check your notification tray`,
+                variant: "success",
+              });
+            }
+          }}
+          className={`${baseBtn} bg-ink-900 hairline text-ink-300 text-[13px]`}
+        >
+          Send test notification
+        </button>
+      </div>
     );
   }
   // off
