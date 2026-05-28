@@ -1,5 +1,6 @@
 import { requireApproved } from "@/lib/auth/gates";
 import { BottomNav } from "@/components/nav/BottomNav";
+import { PushReceiver } from "@/components/push/PushReceiver";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 text-white pb-20 overflow-x-hidden">
+      {/* In-app push banner — shows when a push arrives while the user is
+          actively in the app (iOS suppresses system banners in foreground). */}
+      <PushReceiver />
       {/* main has NO horizontal padding so pages can fully control their own
           inset (and use full width for sticky headers / hero cards). Pages
           should add px-4 or px-5 to their content as needed. */}
