@@ -63,6 +63,17 @@ export function CreateEventForm() {
         <Input name="title" required placeholder="Watchman Cigar Night" />
       </div>
       <div>
+        <Label>Type</Label>
+        <select
+          name="kind"
+          defaultValue="watchmen"
+          className="w-full h-11 rounded-xl bg-ink-800 hairline px-3 text-[15px] text-white outline-none"
+        >
+          <option value="watchmen">Watchmen Event</option>
+          <option value="sponsored">Sponsored (paid placement)</option>
+        </select>
+      </div>
+      <div>
         <Label>Description</Label>
         <Textarea name="description" rows={3} placeholder="What to expect, what to bring..." />
       </div>

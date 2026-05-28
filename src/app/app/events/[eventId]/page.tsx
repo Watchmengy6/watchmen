@@ -10,6 +10,7 @@ import { CheckInButton } from "@/components/events/CheckInButton";
 import { MapPreview } from "@/components/events/MapPreview";
 import { Button } from "@/components/ui/Button";
 import { fmtEventDate, fmtTime } from "@/lib/utils/date";
+import { ShareEventButton } from "@/components/events/ShareEventButton";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,17 @@ export default async function EventDetail({ params }: { params: { eventId: strin
     .maybeSingle();
   if (!event) notFound();
 
-  const { data: myRsvp } = await supabase
-    .from("event_rsvps")
-    .select("status, checked_in")
-    .eq("event_id", event.id)
-    .eq("user_id", profile.id)
-    .maybeSingle();
+  // checked_in column was revoked from `authenticated` in migration 00011 —
+  // use the my_event_rsvp() SECURITY DEFINER RPC for self-RSVP reads.
+  const { data: myRsvpRows } = await supabase.rpc("my_event_rsvp", {
+    p_event_id: event.id,
+  });
+  const myRsvp = Array.isArray(myRsvpRows) && myRsvpRows.length > 0 ? myRsvpRows[0] : null;
 
+  // Attendee list — drop checked_in (revoked); we still get status + profile.
   const { data: attendees } = await supabase
     .from("event_rsvps")
-    .select("user_id, status, checked_in, profiles(id, full_name, profile_photo_url)")
+    .select("user_id, status, profiles(id, full_name, profile_photo_url)")
     .eq("event_id", event.id)
     .eq("status", "going");
 
@@ -92,6 +94,8 @@ export default async function EventDetail({ params }: { params: { eventId: strin
           )}
         </div>
 
+        <ShareEventButton eventId={event.id} title={event.title} />
+
         {going ? (
           <Link href={`/app/events/${event.id}/chat`}>
             <Button variant="outline" fullWidth size="lg">
@@ -126,9 +130,6 @@ export default async function EventDetail({ params }: { params: { eventId: strin
                   <span className="text-[12px] text-ink-100">
                     {a.profiles?.full_name?.split(" ")[0]}
                   </span>
-                  {a.checked_in ? (
-                    <span className="text-[10px] text-emerald-300">✓</span>
-                  ) : null}
                 </Link>
               ))}
               {attendees?.length === 0 ? (

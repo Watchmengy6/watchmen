@@ -12,9 +12,14 @@ export default async function MemberProfile({ params }: { params: { userId: stri
   await requireApproved();
   const supabase = supabaseServer();
 
+  // Use safe column list — email/phone/invite_code were revoked from
+  // `authenticated` in migration 00011. select("*") would silently return
+  // no rows because permission is denied on those columns.
   const { data: m } = await supabase
     .from("profiles")
-    .select("*")
+    .select(
+      "id, full_name, profile_photo_url, bio, occupation, company, instagram_url, interests, role, status, points_total, invited_by_user_id, created_at, last_active_at, venmo_username, cashapp_username, username",
+    )
     .eq("id", params.userId)
     .eq("status", "approved")
     .maybeSingle();
@@ -27,11 +32,13 @@ export default async function MemberProfile({ params }: { params: { userId: stri
       .select("*", { count: "exact", head: true })
       .eq("invited_by_user_id", m.id)
       .eq("status", "approved"),
+    // checked_in is revoked — fall back to counting "going" RSVPs as the
+    // simpler attendance proxy for the public profile card.
     supabase
       .from("event_rsvps")
       .select("*", { count: "exact", head: true })
       .eq("user_id", m.id)
-      .eq("checked_in", true),
+      .eq("status", "going"),
   ]);
 
   return (

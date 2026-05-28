@@ -1,15 +1,27 @@
 import Link from "next/link";
-import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { fmtEventDate, fmtTime } from "@/lib/utils/date";
 import { CreateEventForm } from "./CreateEventForm";
 import { DeleteEventButton } from "./DeleteEventButton";
+import { requireAdmin } from "@/lib/auth/gates";
 
 export const dynamic = "force-dynamic";
 
+// Service-role client so we can read checked_in (revoked from authenticated
+// in migration 00011). Page is admin-gated.
+function supabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
 export default async function AdminEventsPage() {
-  const supabase = supabaseServer();
+  await requireAdmin();
+  const supabase = supabaseAdmin();
   const { data: events } = await supabase
     .from("events")
     .select("*")

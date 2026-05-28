@@ -26,11 +26,16 @@ export function RsvpButton({
           const r = await rsvpAction(eventId, going ? "not_going" : "going");
           if ((r as any).error) {
             push({ title: "RSVP failed", body: (r as any).error, variant: "error" });
+          } else if (going) {
+            push({ title: "RSVP removed", variant: "success" });
           } else {
+            // Only show the +5 message when points were actually awarded.
             push({
-              title: going ? "RSVP removed" : "You're going",
+              title: "You're going",
               variant: "success",
-              body: going ? undefined : "+5 points · Event room unlocked.",
+              body: (r as any).awardedPoints
+                ? "+5 points · Event room unlocked."
+                : "Event room unlocked.",
             });
           }
         })

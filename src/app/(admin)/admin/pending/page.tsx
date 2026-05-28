@@ -1,13 +1,27 @@
-import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ApprovalButtons } from "./ApprovalButtons";
+import { requireAdmin } from "@/lib/auth/gates";
 
 export const dynamic = "force-dynamic";
 
+// Service-role client. Page is admin-gated by requireAdmin() below — we need
+// service-role to read email/phone which were revoked from authenticated in
+// migration 00011. Without this, the page silently shows "No pending approvals"
+// even when there ARE pending signups.
+function supabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
 export default async function PendingPage() {
-  const supabase = supabaseServer();
+  await requireAdmin();
+  const supabase = supabaseAdmin();
   // Note: we used to embed `inviter:profiles!...fkey(...)` here, but the
   // self-referencing embed silently errors against PostgREST in some
   // setups, which made the whole query return null and the admin saw

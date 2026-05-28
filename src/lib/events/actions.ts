@@ -6,15 +6,46 @@ import type { RsvpStatus } from "@/types/database";
 
 export async function rsvpAction(eventId: string, status: RsvpStatus) {
   const supabase = supabaseServer();
+
+  // Look up the previous RSVP so we can tell the client whether THIS call
+  // was the one that earned the +5 points. (The DB RPC only awards on
+  // first transition to "going", but the UI used to toast "+5" on every
+  // click which made users think they were farming.)
+  let wasGoing = false;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+      if (me) {
+        const { data: existing } = await supabase
+          .from("event_rsvps")
+          .select("status")
+          .eq("event_id", eventId)
+          .eq("user_id", me.id)
+          .maybeSingle();
+        wasGoing = existing?.status === "going";
+      }
+    }
+  } catch {}
+
   const { error } = await supabase.rpc("rsvp_event", {
     p_event_id: eventId,
     p_status: status,
   });
   if (error) return { error: error.message };
+
+  const awardedPoints = !wasGoing && status === "going";
+
   revalidatePath(`/app/events/${eventId}`);
   revalidatePath(`/app/events`);
   revalidatePath(`/app/home`);
-  return { success: true };
+  return { success: true, awardedPoints };
 }
 
 export async function checkInAction(input: {
@@ -60,6 +91,8 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
   const image_url = String(formData.get("image_url") ?? "").trim() || null;
   const latitudeStr = String(formData.get("latitude") ?? "").trim();
   const longitudeStr = String(formData.get("longitude") ?? "").trim();
+  const kindRaw = String(formData.get("kind") ?? "watchmen").trim();
+  const kind = kindRaw === "sponsored" ? "sponsored" : "watchmen";
 
   if (!title || !event_date) return { error: "Title and date are required." };
 
@@ -76,6 +109,7 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
     longitude: longitudeStr ? Number(longitudeStr) : null,
     created_by_user_id: profile.id,
     status: "published",
+    kind,
   });
   if (error) return { error: error.message };
 
