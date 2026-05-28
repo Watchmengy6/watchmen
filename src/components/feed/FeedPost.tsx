@@ -10,6 +10,7 @@ import { GroupCategoryTag } from "@/components/groups/GroupCategoryTag";
 import { ActivityCard, type ActivityCardKind } from "@/components/chat/ActivityCard";
 import { RichText } from "@/components/feed/RichText";
 import { SharePostButton } from "@/components/feed/SharePostButton";
+import { ReportButton } from "@/components/moderation/ReportButton";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 
@@ -315,6 +316,11 @@ export function FeedPost({
           <div className="flex-1" />
 
           <SharePostButton postId={post.id} authorName={post.author.full_name} />
+          <ReportButton
+            target={{ kind: "post", id: post.id }}
+            className="px-3 h-9 text-ink-400 text-[12px] hover:text-white"
+            label="Report"
+          />
         </div>
 
         {/* Comments */}

@@ -5,6 +5,7 @@ import { logoutAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
 import { EnablePushButton } from "@/components/push/EnablePushButton";
+import { DeleteAccountButton } from "@/components/account/DeleteAccountButton";
 
 export const dynamic = "force-dynamic";
 
@@ -75,12 +76,35 @@ export default async function ProfilePage() {
         </p>
       </div>
 
-      <div className="px-5 mt-10">
+      {/* Privacy & moderation settings */}
+      <div className="px-5 mt-8 space-y-2">
+        <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">
+          Privacy
+        </div>
+        <Link
+          href="/app/profile/blocked"
+          className="block w-full h-11 rounded-full bg-ink-800 hairline text-ink-100 text-[13.5px] font-semibold leading-[44px] text-center"
+        >
+          Blocked members
+        </Link>
+        <div className="flex gap-2 pt-1 text-[11.5px] text-ink-400">
+          <Link href="/legal/privacy" className="underline hover:text-ink-200">
+            Privacy policy
+          </Link>
+          <span>·</span>
+          <Link href="/legal/terms" className="underline hover:text-ink-200">
+            Terms
+          </Link>
+        </div>
+      </div>
+
+      <div className="px-5 mt-10 space-y-3">
         <form action={logoutAction}>
           <Button type="submit" variant="outline" fullWidth>
             Sign out
           </Button>
         </form>
+        <DeleteAccountButton />
       </div>
     </div>
   );

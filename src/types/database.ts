@@ -28,6 +28,9 @@ export interface Profile {
   created_at: string;
   updated_at: string;
   last_active_at: string | null;
+  // App Store readiness columns (migration 00019)
+  disclaimer_accepted_at?: string | null;
+  deleted_at?: string | null;
 }
 
 export interface Event {

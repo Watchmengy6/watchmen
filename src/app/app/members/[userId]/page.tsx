@@ -5,6 +5,8 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { InterestChipsReadOnly } from "@/components/profile/InterestChips";
+import { BlockButton } from "@/components/moderation/BlockButton";
+import { ReportButton } from "@/components/moderation/ReportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,20 @@ export default async function MemberProfile({ params }: { params: { userId: stri
   if (!m) notFound();
   // Non-admin viewers can only see approved members.
   if (!isAdmin && m.status !== "approved") notFound();
+
+  // Has the viewer already blocked this member? Used to render the
+  // block / unblock toggle. Self-view skips the moderation row entirely.
+  const isSelf = m.id === me.id;
+  let isBlocked = false;
+  if (!isSelf) {
+    const { data: blockRow } = await supabase
+      .from("user_blocks")
+      .select("id")
+      .eq("blocker_id", me.id)
+      .eq("blocked_id", m.id)
+      .maybeSingle();
+    isBlocked = !!blockRow;
+  }
 
   const [{ count: invitesApproved }, { count: eventsAttended }] = await Promise.all([
     supabase
@@ -189,6 +205,19 @@ export default async function MemberProfile({ params }: { params: { userId: stri
           </div>
         </CardBody>
       </Card>
+
+      {/* Moderation row — Apple-required for any social app. Hidden on
+          self-view since you can't report or block yourself. */}
+      {!isSelf ? (
+        <div className="flex items-center gap-2 pt-2">
+          <BlockButton targetProfileId={m.id} isBlocked={isBlocked} variant="compact" />
+          <ReportButton
+            target={{ kind: "user", id: m.id }}
+            className="h-9 px-3 rounded-full bg-ink-800 hairline text-ink-100 text-[12px] font-semibold"
+            label="Report"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
