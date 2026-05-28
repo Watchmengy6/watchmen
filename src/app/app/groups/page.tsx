@@ -84,45 +84,57 @@ export default async function GroupsPage({
         </div>
       </div>
 
-      <div className="px-4 pt-3 space-y-3">
+      <div className="px-4 pt-3">
         {list.length === 0 ? (
           <div className="text-center text-ink-300 text-sm py-10">
-            {tab === "joined" ? "You haven't joined any groups yet." : "No groups yet — be the first to create one."}
+            {tab === "joined"
+              ? "You haven't joined any groups yet."
+              : "No groups yet — be the first to create one."}
           </div>
         ) : (
-          list.map((g: any) => (
-            <Link
-              key={g.id}
-              href={`/app/groups/${g.id}`}
-              className="block rounded-2xl bg-ink-800/80 hairline p-4 active:bg-ink-800"
-            >
-              <div className="flex items-start gap-3">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-gold-500/30 to-gold-700/10 ring-1 ring-gold-500/30 flex items-center justify-center text-[20px]">
-                  {g.name[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="text-white text-[15px] font-semibold truncate">
-                      {g.name}
+          <div className="grid grid-cols-2 gap-3">
+            {list.map((g: any) => (
+              <Link
+                key={g.id}
+                href={`/app/groups/${g.id}`}
+                className="block rounded-2xl bg-ink-800/80 hairline overflow-hidden active:bg-ink-800 shadow-card"
+              >
+                {/* Cover (square-ish hero) */}
+                {g.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={g.cover_url}
+                    alt=""
+                    className="w-full aspect-square object-cover"
+                  />
+                ) : (
+                  <div className="w-full aspect-square bg-gradient-to-br from-gold-500/25 via-gold-700/10 to-ink-900 ring-1 ring-gold-500/30 flex items-center justify-center">
+                    <span className="text-gradient-gold text-3xl font-semibold">
+                      {g.name[0]?.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <div className="px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="text-[9.5px] tracking-[0.2em] uppercase text-gold-300/80 truncate">
+                      {g.category}
                     </div>
                     {myGroupIds.has(g.id) ? (
-                      <span className="text-[10px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 inline-flex items-center">
+                      <span className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 inline-flex items-center shrink-0">
                         Joined
                       </span>
                     ) : null}
                   </div>
-                  <div className="text-[11.5px] text-gold-300/80 uppercase tracking-wider mt-0.5">
-                    {g.category} · {counts.get(g.id) ?? 0} members
+                  <div className="text-white text-[14px] font-semibold leading-tight truncate">
+                    {g.name}
                   </div>
-                  {g.description ? (
-                    <div className="text-ink-300 text-[13px] mt-1.5 line-clamp-2">
-                      {g.description}
-                    </div>
-                  ) : null}
+                  <div className="text-ink-400 text-[11px] mt-1">
+                    {counts.get(g.id) ?? 0} member{(counts.get(g.id) ?? 0) === 1 ? "" : "s"}
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))
+              </Link>
+            ))}
+          </div>
         )}
       </div>
     </div>
