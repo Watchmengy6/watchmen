@@ -117,6 +117,10 @@ export async function createPostAction(
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return { error: "Say something." };
 
+  // Member "meetup" posts are stored as kind='post' with structured
+  // meetup_when_at / meetup_location fields. The post_kind enum stays
+  // unchanged — the renderer keys off the structured fields instead.
+  const isMeetupKind = kindRaw === "meetup";
   const kind = ["post", "job", "need", "announcement"].includes(kindRaw)
     ? (kindRaw as "post" | "job" | "need" | "announcement")
     : "post";
@@ -130,6 +134,24 @@ export async function createPostAction(
     ? mediaTypeRaw
     : "none") as "none" | "image" | "video";
 
+  // Parse the member-meetup when/where (only present for type="meetup").
+  let meetupWhenAt: string | null = null;
+  let meetupLocation: string | null = null;
+  if (isMeetupKind) {
+    const whenLocal = String(formData.get("meetup_when_at") ?? "").trim();
+    const locStr = String(formData.get("meetup_location") ?? "").trim();
+    const tzOffset = String(formData.get("tz_offset") ?? "").trim() || "+00:00";
+    if (!whenLocal || !locStr) {
+      return { error: "Meetup needs both when and where." };
+    }
+    // "2026-06-01T18:30" + "-04:00" → "2026-06-01T18:30:00-04:00"
+    const padded = whenLocal.split(":").length === 2
+      ? `${whenLocal}:00`
+      : whenLocal;
+    meetupWhenAt = new Date(`${padded}${tzOffset}`).toISOString();
+    meetupLocation = locStr;
+  }
+
   const { data: post, error } = await supabase
     .from("posts")
     .insert({
@@ -141,6 +163,8 @@ export async function createPostAction(
       tagged_meetup_id: taggedMeetupId,
       media_url: mediaUrl,
       media_type: mediaType,
+      meetup_when_at: meetupWhenAt,
+      meetup_location: meetupLocation,
     })
     .select("id")
     .single();

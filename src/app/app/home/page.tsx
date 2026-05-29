@@ -105,7 +105,7 @@ export default async function HomePage() {
     supabase
       .from("posts")
       .select(
-        `id, kind, body, created_at, media_url,
+        `id, kind, body, created_at, media_url, meetup_when_at, meetup_location,
          author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company, birthday),
          tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
          tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
@@ -172,6 +172,10 @@ export default async function HomePage() {
       body: p.body,
       created_at: p.created_at,
       image_url: p.media_url ?? null,
+      // Member-meetup feed posts carry structured when/where so the
+      // renderer can show a card without resolving a meetup entity.
+      meetup_when_at: p.meetup_when_at ?? null,
+      meetup_location: p.meetup_location ?? null,
       author: {
         id: author?.id ?? "",
         full_name: author?.full_name ?? "Brother",

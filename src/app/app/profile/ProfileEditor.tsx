@@ -73,7 +73,7 @@ export function ProfileEditor({
             <Input
               name="username"
               defaultValue={defaults.username}
-              placeholder="aaron"
+              placeholder="your-handle"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -121,7 +121,7 @@ export function ProfileEditor({
             <Input
               name="venmo_username"
               defaultValue={defaults.venmo_username}
-              placeholder="Aaron-Pilkington"
+              placeholder="Your-Venmo-Handle"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -132,7 +132,7 @@ export function ProfileEditor({
             <Input
               name="cashapp_username"
               defaultValue={defaults.cashapp_username}
-              placeholder="aaronpilk"
+              placeholder="your-cashtag"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -150,14 +150,14 @@ export function ProfileEditor({
           </div>
           <div>
             <Label>Spouse / partner</Label>
-            <Input name="spouse" defaultValue={defaults.spouse} placeholder="Lauren" />
+            <Input name="spouse" defaultValue={defaults.spouse} placeholder="Her name" />
           </div>
           <div>
             <Label>Kids</Label>
             <Input
               name="kids"
               defaultValue={defaults.kids}
-              placeholder="Cole (4), Ava (2)"
+              placeholder="Kid names + ages"
             />
           </div>
         </CardBody>

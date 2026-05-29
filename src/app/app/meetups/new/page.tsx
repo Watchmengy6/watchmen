@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireApproved } from "@/lib/auth/gates";
 import { createMeetupAction } from "@/lib/meetups/realActions";
 import { TzOffsetField } from "./TzOffsetField";
@@ -9,7 +10,12 @@ export const dynamic = "force-dynamic";
 const CATEGORIES = ["Coffee", "Workout", "Drinks", "Outdoors", "Food", "Other"];
 
 export default async function NewMeetupPage() {
-  await requireApproved();
+  const { profile } = await requireApproved();
+  // Meetups are admin-only per Dustin. Non-admins get bounced to the
+  // meetups list rather than seeing a form they can't submit.
+  if (profile.role !== "admin" && profile.role !== "super_admin") {
+    redirect("/app/meetups");
+  }
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
       <div

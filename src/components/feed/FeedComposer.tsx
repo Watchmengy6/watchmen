@@ -9,6 +9,7 @@ import { searchMembersForMention } from "@/lib/feed/actions";
 
 const types = [
   { id: "post", label: "Post" },
+  { id: "meetup", label: "Meetup" },
   { id: "job", label: "Hiring" },
   { id: "need", label: "Need" },
 ] as const;
@@ -60,6 +61,9 @@ export function FeedComposer({
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Member-meetup fields (only used when type === "meetup")
+  const [meetupWhen, setMeetupWhen] = useState("");
+  const [meetupWhere, setMeetupWhere] = useState("");
   const router = useRouter();
   const taggedGroup = taggedGroupId
     ? taggableGroups.find((g) => g.id === taggedGroupId)
@@ -120,6 +124,8 @@ export function FeedComposer({
     setErr(null);
     setMediaUrl(null);
     setMediaType(null);
+    setMeetupWhen("");
+    setMeetupWhere("");
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -141,6 +147,12 @@ export function FeedComposer({
 
   function handlePost() {
     if (!text.trim() || pending) return;
+    // Meetup posts require both fields — otherwise it's just a regular
+    // post with the wrong label and no card to render.
+    if (type === "meetup" && (!meetupWhen.trim() || !meetupWhere.trim())) {
+      setErr("Meetup needs both when and where.");
+      return;
+    }
     if (!onSubmit) {
       // No server action wired — just reset (preview mode).
       reset();
@@ -152,6 +164,16 @@ export function FeedComposer({
     fd.set("tagged_group_id", taggedGroupId ?? "");
     fd.set("media_url", mediaUrl ?? "");
     fd.set("media_type", mediaType ?? "none");
+    if (type === "meetup") {
+      // datetime-local has no timezone — pass the local string and the
+      // server combines it with the browser tz offset for storage.
+      fd.set("meetup_when_at", meetupWhen);
+      fd.set("meetup_location", meetupWhere.trim());
+      fd.set(
+        "tz_offset",
+        formatTzOffset(new Date().getTimezoneOffset()),
+      );
+    }
     startTransition(async () => {
       const result = await onSubmit(fd);
       if (result && "error" in result && result.error) {
@@ -196,17 +218,49 @@ export function FeedComposer({
               </button>
             ))}
           </div>
+          {/* Meetup-only fields: when + where. Render above the textarea
+              so it reads as "I'm doing X at Y, here's what it is." */}
+          {type === "meetup" ? (
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1">
+                  When
+                </div>
+                <input
+                  type="datetime-local"
+                  value={meetupWhen}
+                  onChange={(e) => setMeetupWhen(e.target.value)}
+                  className="w-full h-10 rounded-xl bg-ink-900/60 hairline px-3 text-[13.5px] text-white outline-none focus:ring-2 focus:ring-gold-400/30"
+                />
+              </div>
+              <div>
+                <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1">
+                  Where
+                </div>
+                <input
+                  type="text"
+                  value={meetupWhere}
+                  onChange={(e) => setMeetupWhere(e.target.value)}
+                  placeholder="Black Crow Coffee"
+                  className="w-full h-10 rounded-xl bg-ink-900/60 hairline px-3 text-[13.5px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
+                />
+              </div>
+            </div>
+          ) : null}
+
           <textarea
             ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
             placeholder={
-              type === "job"
-                ? "Describe the role, location, and how to reach you. Tag with @"
-                : type === "need"
-                  ? "What do you need? Tag a brother with @"
-                  : "What's on your mind? Tag with @"
+              type === "meetup"
+                ? "Who's around? Quick details — what is it, who should come?"
+                : type === "job"
+                  ? "Describe the role, location, and how to reach you. Tag with @"
+                  : type === "need"
+                    ? "What do you need? Tag a brother with @"
+                    : "What's on your mind? Tag with @"
             }
             className="w-full rounded-xl bg-ink-900/60 hairline px-3 py-2.5 text-[15px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 resize-none"
           />
@@ -386,4 +440,17 @@ export function FeedComposer({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Format a JS Date timezone offset (minutes, sign-flipped per Date API)
+ * into "+HH:MM" / "-HH:MM" for storage. Mirrors the helper used by the
+ * meetup form so member-meetup posts respect the user's local time.
+ */
+function formatTzOffset(jsOffsetMinutes: number): string {
+  const sign = jsOffsetMinutes > 0 ? "-" : "+";
+  const abs = Math.abs(jsOffsetMinutes);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `${sign}${hh}:${mm}`;
 }

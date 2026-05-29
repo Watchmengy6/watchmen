@@ -61,6 +61,9 @@ export interface FeedPostShape {
   author: FeedPostAuthor;
   tagged_group?: FeedPostTaggedGroup | null;
   activity?: FeedPostActivity | null;
+  /** Member-meetup post: when + where the brother wants to meet up. */
+  meetup_when_at?: string | null;
+  meetup_location?: string | null;
   likes: number;
   liked_by_me: boolean;
   comments: FeedPostComment[];
@@ -278,6 +281,20 @@ export function FeedPost({
           </div>
         ) : null}
 
+        {/* Member-meetup card — structured when/where data attached to a
+            regular feed post. Brothers signal interest via the like
+            button below; comments coordinate the details. */}
+        {post.meetup_when_at ? (
+          <div className="px-4 pt-3">
+            <MemberMeetupCard
+              whenAt={post.meetup_when_at}
+              location={post.meetup_location ?? ""}
+              hostName={post.author.full_name}
+              hostPhoto={post.author.profile_photo_url ?? null}
+            />
+          </div>
+        ) : null}
+
         {post.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -422,5 +439,52 @@ export function FeedPost({
         ) : null}
       </CardBody>
     </Card>
+  );
+}
+
+/**
+ * Inline card rendered when a feed post has structured meetup_when_at +
+ * meetup_location fields. Looks like the official meetup activity card
+ * but doesn't link out — the post body + comments ARE the meetup.
+ */
+function MemberMeetupCard({
+  whenAt,
+  location,
+  hostName,
+  hostPhoto,
+}: {
+  whenAt: string;
+  location: string;
+  hostName: string;
+  hostPhoto: string | null;
+}) {
+  const when = new Date(whenAt);
+  const month = when.toLocaleString("en-US", { month: "short" }).toUpperCase();
+  const day = when.getDate();
+  const dateLabel = when.toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return (
+    <div className="rounded-2xl bg-ink-800/80 ring-1 ring-white/[0.06] p-3 flex items-center gap-3">
+      <div className="h-12 w-12 rounded-xl bg-gold-500/15 ring-1 ring-gold-500/25 flex flex-col items-center justify-center shrink-0">
+        <div className="text-[9px] uppercase tracking-wider text-gold-200 leading-none">
+          {month}
+        </div>
+        <div className="text-[17px] font-bold text-white leading-none mt-0.5">
+          {day}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10.5px] uppercase tracking-[0.2em] text-gold-300/80">
+          Meetup · {hostName}
+        </div>
+        <div className="text-white text-[14px] font-semibold mt-0.5 truncate">
+          {location}
+        </div>
+        <div className="text-ink-300 text-[12px] truncate">{dateLabel}</div>
+      </div>
+    </div>
   );
 }

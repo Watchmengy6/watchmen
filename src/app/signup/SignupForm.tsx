@@ -22,7 +22,7 @@ export function SignupForm({ inviteCode }: { inviteCode: string }) {
 
       <div>
         <Label>Full name</Label>
-        <Input name="full_name" required autoComplete="name" placeholder="Aaron Pilkington" />
+        <Input name="full_name" required autoComplete="name" placeholder="Your full name" />
       </div>
       <div>
         <Label>Email</Label>

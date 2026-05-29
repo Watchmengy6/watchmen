@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MeetupsPage() {
   const { profile } = await requireApproved();
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   const supabase = supabaseServer();
 
   const nowIso = new Date().toISOString();
@@ -53,22 +54,24 @@ export default async function MeetupsPage() {
               Meetups
             </div>
           </div>
-          <Link
-            href="/app/meetups/new"
-            className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black inline-flex items-center gap-1.5"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                 strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            New
-          </Link>
+          {isAdmin ? (
+            <Link
+              href="/app/meetups/new"
+              className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black inline-flex items-center gap-1.5"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              New
+            </Link>
+          ) : null}
         </div>
       </div>
 
       <div className="px-4 pt-3">
         <p className="text-ink-300 text-[13.5px] mb-4">
-          <span className="text-white font-semibold">Meetups</span> are casual. Any brother can host one in five seconds — coffee, a workout, drinks, a walk.
+          <span className="text-white font-semibold">Meetups</span> are official Watchmen get-togethers — coffee, a workout, drinks, a walk. Want to invite brothers to something informal? Post it on the feed.
         </p>
 
         <div className="space-y-3">

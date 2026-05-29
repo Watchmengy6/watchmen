@@ -44,10 +44,19 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   if (!user) return;
   const { data: me } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, role")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me) return;
+
+  // Belt-and-suspenders: meetups are admin-only per Dustin. RLS in
+  // migration 00020 enforces this at the DB layer, but we also check
+  // here so we get a clean redirect (instead of a silent RLS failure)
+  // and so the check works even if the migration hasn't been applied
+  // yet on a given environment.
+  if (me.role !== "admin" && me.role !== "super_admin") {
+    redirect("/app/meetups");
+  }
 
   const { data: m, error } = await supabase
     .from("meetups")
