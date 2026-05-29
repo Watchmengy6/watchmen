@@ -16,7 +16,9 @@ export default async function DmsPage({
   // The "events" sub-tab is hidden for now — event chat still lives on the
   // old chats/messages tables and doesn't populate threads.kind = 'event'.
   // Will be re-added when event chat is migrated onto the threads system.
-  const activeTab = (searchParams?.tab ?? "private") as "private" | "groups";
+  // Default to Groups (Dustin's call) — most members will land here
+  // looking for run-club / bible-study chatter, not a one-on-one DM.
+  const activeTab = (searchParams?.tab ?? "groups") as "private" | "groups";
 
   // Threads where I'm a member.
   const { data: myThreadRows } = await supabase
@@ -84,10 +86,10 @@ export default async function DmsPage({
         <div className="flex items-center justify-between px-4 py-2.5">
           <div>
             <div className="text-[10px] tracking-[0.3em] uppercase text-gold-300/80">
-              Inbox
+              Chats
             </div>
             <div className="text-white text-[22px] font-semibold leading-tight">
-              Messages
+              Conversations
             </div>
           </div>
           <Link

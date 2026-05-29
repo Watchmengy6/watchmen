@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 
 const actions = [
-  { href: "/app/chat", label: "Main Room", sub: "Group chat" },
+  { href: "/app/groups", label: "Groups", sub: "Run club, bible study…" },
   { href: "/app/invite", label: "Invite a Brother", sub: "Share your link" },
   { href: "/app/events", label: "Events", sub: "RSVP & check in" },
   { href: "/app/members", label: "Members", sub: "Directory" },

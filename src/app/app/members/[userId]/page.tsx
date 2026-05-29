@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { InterestChipsReadOnly } from "@/components/profile/InterestChips";
 import { BlockButton } from "@/components/moderation/BlockButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
+import { isBirthdayToday } from "@/lib/utils/birthday";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,14 @@ export default async function MemberProfile({ params }: { params: { userId: stri
           <div className="flex justify-center">
             <Avatar src={m.profile_photo_url} name={m.full_name} size={96} ring />
           </div>
-          <h1 className="mt-4 text-xl font-semibold">{m.full_name}</h1>
+          <h1 className="mt-4 text-xl font-semibold">
+            {m.full_name}
+            {isBirthdayToday(m.birthday) ? (
+              <span className="ml-2" title="Birthday today" aria-label="Birthday today">
+                🎂
+              </span>
+            ) : null}
+          </h1>
           {m.username ? (
             <div className="text-gold-300/80 text-[12px] mt-0.5">@{m.username}</div>
           ) : null}

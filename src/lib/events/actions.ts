@@ -135,29 +135,9 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
     console.warn("[createEventAction] feed post insert failed (non-fatal)", e);
   }
 
-  try {
-    const { data: mainChat } = await supabase
-      .from("chats")
-      .select("id")
-      .eq("type", "main")
-      .maybeSingle();
-    if (mainChat) {
-      const dateLabel = new Date(event_date + "T00:00:00").toLocaleDateString(
-        "en-US",
-        { weekday: "short", month: "short", day: "numeric" },
-      );
-      const timeLabel = start_time ? ` · ${start_time.slice(0, 5)}` : "";
-      await supabase.from("messages").insert({
-        chat_id: mainChat.id,
-        user_id: profile.id,
-        // The chat renderer auto-converts /app/events/<id> into a "View
-        // event →" pill, so the URL doubles as the call-to-action.
-        content: `New event: ${title} · ${dateLabel}${timeLabel}${location_name ? ` · ${location_name}` : ""} /app/events/${insertedEvent.id}`,
-      });
-    }
-  } catch (e) {
-    console.warn("[createEventAction] main-chat broadcast failed (non-fatal)", e);
-  }
+  // Note: master chat broadcast was removed when the master chat tab
+  // was deleted (migration 00020). The feed post above is the only
+  // broadcast surface now.
 
   // Fire-and-forget push fan-out — don't make the creator wait for
   // every push delivery before the action returns.
@@ -205,6 +185,5 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
   revalidatePath("/app/events");
   revalidatePath("/admin/events");
   revalidatePath("/app/home");
-  revalidatePath("/app/chat");
   return { success: true };
 }

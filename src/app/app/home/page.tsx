@@ -19,12 +19,47 @@ export default async function HomePage() {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  // Birthdays today — used for the celebratory banner. We also book an
+  // auto feed post via the SECURITY DEFINER RPC (idempotent: unique on
+  // member_id + posted_for_date so concurrent renders dedupe at the DB).
+  // Computing in JS avoids a synchronous DB roundtrip per home render.
+  const { data: birthdayCandidates } = await supabase
+    .from("profiles")
+    .select("id, full_name, profile_photo_url, birthday")
+    .eq("status", "approved")
+    .not("birthday", "is", null);
+  const todayLocal = new Date();
+  const birthdaysToday = (birthdayCandidates ?? []).filter((p: any) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(p.birthday ?? "");
+    if (!m) return false;
+    return (
+      Number(m[2]) === todayLocal.getMonth() + 1 &&
+      Number(m[3]) === todayLocal.getDate()
+    );
+  });
+  // Fire-and-forget book the auto-post for each birthday member. The RPC
+  // is idempotent, so multiple home renders won't create dupes.
+  if (birthdaysToday.length > 0) {
+    void (async () => {
+      try {
+        await Promise.all(
+          birthdaysToday.map((b: any) =>
+            supabase.rpc("book_birthday_auto_post", { p_member_id: b.id }),
+          ),
+        );
+      } catch (e) {
+        console.warn("[home] birthday auto-post failed (non-fatal)", e);
+      }
+    })();
+  }
+
   // Phase 1: fan everything that only needs the profile into ONE Promise.all.
   // Previously these ran serially (next-event → pending → unread → members →
   // groups → posts) which stacked five round-trip waits before the first
   // byte. Running in parallel is the single biggest win here.
   const [
     { data: nextEvent },
+    { data: nextMeetup },
     pendingRes,
     { count: unread },
     { data: joinedGroups },
@@ -37,6 +72,16 @@ export default async function HomePage() {
       .gte("event_date", today)
       .order("event_date", { ascending: true })
       .order("start_time", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    // Next upcoming meetup for the second hero banner.
+    supabase
+      .from("meetups")
+      .select(
+        "id, title, when_at, location_name, host:profiles!meetups_host_user_id_fkey(full_name)",
+      )
+      .gte("when_at", new Date().toISOString())
+      .order("when_at", { ascending: true })
       .limit(1)
       .maybeSingle(),
     isAdmin
@@ -61,7 +106,7 @@ export default async function HomePage() {
       .from("posts")
       .select(
         `id, kind, body, created_at, media_url,
-         author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company),
+         author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company, birthday),
          tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
          tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
          tagged_meetup:meetups!posts_tagged_meetup_id_fkey(
@@ -132,6 +177,7 @@ export default async function HomePage() {
         full_name: author?.full_name ?? "Brother",
         username: author?.username ?? undefined,
         profile_photo_url: author?.profile_photo_url ?? null,
+        birthday: author?.birthday ?? null,
         role_text:
           author?.occupation && author?.company
             ? `${author.occupation} · ${author.company}`
@@ -241,6 +287,30 @@ export default async function HomePage() {
       </div>
 
       <div className="px-4 pt-3 space-y-3">
+        {/* Birthday banner — one row per brother whose birthday is today.
+            Tap to jump to their profile and wish them well. */}
+        {birthdaysToday.map((b: any) => (
+          <Link key={b.id} href={`/app/members/${b.id}`} className="block">
+            <div className="rounded-2xl bg-gradient-to-r from-pink-500/10 via-gold-500/10 to-transparent ring-1 ring-pink-400/25 px-4 py-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-pink-500/15 ring-1 ring-pink-400/30 flex items-center justify-center shrink-0 text-[18px]">
+                🎂
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10.5px] uppercase tracking-[0.2em] text-pink-200/80">
+                  Birthday today
+                </div>
+                <div className="text-white text-[14px] font-semibold truncate">
+                  Wish {b.full_name} a happy birthday
+                </div>
+                <div className="text-ink-300 text-[12px] truncate">
+                  Tap to drop a note on their profile
+                </div>
+              </div>
+              <div className="text-ink-300 text-sm">›</div>
+            </div>
+          </Link>
+        ))}
+
         {/* Next event banner */}
         {nextEvent ? (
           <Link href={`/app/events/${nextEvent.id}`} className="block">
@@ -270,6 +340,47 @@ export default async function HomePage() {
           </Link>
         ) : null}
 
+        {/* Next meetup banner — informal coordinated get-together. Same
+            shape as the event banner but a touch dimmer so events stay
+            the headline. */}
+        {nextMeetup ? (() => {
+          const host = Array.isArray(nextMeetup.host)
+            ? nextMeetup.host[0]
+            : nextMeetup.host;
+          const when = new Date(nextMeetup.when_at);
+          return (
+            <Link href={`/app/meetups/${nextMeetup.id}`} className="block">
+              <div className="rounded-2xl bg-ink-800/80 ring-1 ring-white/[0.06] px-4 py-3 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-ink-700 ring-1 ring-white/[0.08] flex flex-col items-center justify-center shrink-0">
+                  <div className="text-[9px] uppercase tracking-wider text-ink-300 leading-none">
+                    {when.toLocaleString("en-US", { month: "short" })}
+                  </div>
+                  <div className="text-[15px] font-bold text-white leading-none mt-0.5">
+                    {when.getDate()}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10.5px] uppercase tracking-[0.2em] text-ink-400">
+                    Next Meetup{host?.full_name ? ` · ${host.full_name}` : ""}
+                  </div>
+                  <div className="text-white text-[14px] font-semibold truncate">
+                    {nextMeetup.title}
+                  </div>
+                  <div className="text-ink-300 text-[12px] truncate">
+                    {when.toLocaleString("en-US", {
+                      weekday: "short",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                    {nextMeetup.location_name ? ` · ${nextMeetup.location_name}` : ""}
+                  </div>
+                </div>
+                <div className="text-ink-300 text-sm">›</div>
+              </div>
+            </Link>
+          );
+        })() : null}
+
         {/* Composer */}
         <FeedComposer
           meName={profile.full_name}
@@ -293,6 +404,7 @@ export default async function HomePage() {
                 meName={profile.full_name}
                 meAvatar={profile.profile_photo_url}
                 mentionablePeople={mentionable}
+                isAdmin={isAdmin}
               />
             ))
           )}

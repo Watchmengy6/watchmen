@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { searchMembersForMention } from "@/lib/feed/actions";
+import { isBirthdayToday } from "@/lib/utils/birthday";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -11,6 +12,7 @@ import { ActivityCard, type ActivityCardKind } from "@/components/chat/ActivityC
 import { RichText } from "@/components/feed/RichText";
 import { SharePostButton } from "@/components/feed/SharePostButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
+import { AdminDeletePostButton } from "@/components/feed/AdminDeletePostButton";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 
@@ -21,6 +23,8 @@ export interface FeedPostAuthor {
   profile_photo_url?: string | null;
   /** Headline shown below name. e.g. "Founder · Skyway Media" */
   role_text?: string | null;
+  /** YYYY-MM-DD birthday — used to render 🎂 next to name on their day. */
+  birthday?: string | null;
 }
 
 export interface FeedPostComment {
@@ -77,6 +81,8 @@ export interface FeedPostProps {
   meAvatar?: string | null;
   /** Members the user can @mention in a comment. */
   mentionablePeople?: { id: string; full_name: string; username: string }[];
+  /** When true, render the admin trash icon on the action bar. */
+  isAdmin?: boolean;
 }
 
 export function FeedPost({
@@ -86,6 +92,7 @@ export function FeedPost({
   meName,
   meAvatar,
   mentionablePeople = [],
+  isAdmin = false,
 }: FeedPostProps) {
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likes, setLikes] = useState(post.likes);
@@ -208,6 +215,11 @@ export function FeedPost({
                 className="text-white text-[14px] font-semibold truncate hover:text-gold-200"
               >
                 {post.author.full_name}
+                {isBirthdayToday(post.author.birthday) ? (
+                  <span className="ml-1" title="Birthday today" aria-label="Birthday today">
+                    🎂
+                  </span>
+                ) : null}
               </Link>
               {post.type === "job" ? (
                 <Badge variant="gold">Hiring</Badge>
@@ -321,6 +333,7 @@ export function FeedPost({
             className="px-3 h-9 text-ink-400 text-[12px] hover:text-white"
             label="Report"
           />
+          {isAdmin ? <AdminDeletePostButton postId={post.id} /> : null}
         </div>
 
         {/* Comments */}

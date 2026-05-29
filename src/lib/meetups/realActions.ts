@@ -90,40 +90,9 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
     console.warn("[createMeetupAction] feed post insert failed (non-fatal)", e);
   }
 
-  try {
-    // Main Room is admin-write-only via RLS, so the meetup host (a regular
-    // member) can't insert directly. Use the service-role client to bypass
-    // — this is a system-style broadcast, attributed to the host so the
-    // bubble shows their name + avatar.
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    );
-    const { data: mainChat } = await admin
-      .from("chats")
-      .select("id")
-      .eq("type", "main")
-      .maybeSingle();
-    if (mainChat) {
-      const whenLabel = new Date(whenAt).toLocaleString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      await admin.from("messages").insert({
-        chat_id: mainChat.id,
-        user_id: me.id,
-        // The chat renderer auto-converts /app/meetups/<id> into a "View
-        // meetup →" pill, so we don't have to write a friendly label here.
-        content: `New meetup: ${title}${locationName ? ` · ${locationName}` : ""} · ${whenLabel} /app/meetups/${m.id}`,
-      });
-    }
-  } catch (e) {
-    console.warn("[createMeetupAction] main-chat broadcast failed (non-fatal)", e);
-  }
+  // Note: master chat broadcast was removed when the master chat tab
+  // was deleted (migration 00020). The feed post above is the only
+  // broadcast surface now.
 
   // Fire-and-forget push fan-out — the host shouldn't wait for every
   // recipient's push to deliver before being redirected to the meetup.
@@ -171,7 +140,6 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
 
   revalidatePath("/app/meetups");
   revalidatePath("/app/home");
-  revalidatePath("/app/chat");
   redirect(`/app/meetups/${m.id}`);
 }
 

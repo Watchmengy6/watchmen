@@ -8,6 +8,7 @@ interface Props {
   meName: string;
   meAvatar?: string | null;
   mentionablePeople?: { id: string; full_name: string; username: string }[];
+  isAdmin?: boolean;
 }
 
 /**
@@ -15,13 +16,20 @@ interface Props {
  * onToggleLike / onAddComment props. Lives next to /app/home so we
  * don't accidentally import server actions from the preview tree.
  */
-export function FeedPostClient({ post, meName, meAvatar, mentionablePeople = [] }: Props) {
+export function FeedPostClient({
+  post,
+  meName,
+  meAvatar,
+  mentionablePeople = [],
+  isAdmin = false,
+}: Props) {
   return (
     <FeedPost
       post={post}
       meName={meName}
       meAvatar={meAvatar}
       mentionablePeople={mentionablePeople}
+      isAdmin={isAdmin}
       onToggleLike={async (postId, nextLiked) => {
         return await toggleLikeAction(postId, nextLiked);
       }}

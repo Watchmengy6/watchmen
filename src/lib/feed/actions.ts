@@ -1,9 +1,47 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser } from "@/lib/push/send";
+
+/**
+ * Admin moderation: soft-delete any feed post (sets deleted_at).
+ * Authors can also delete their own posts via a separate flow; this
+ * one is the heavy hammer for leadership.
+ */
+export async function adminDeletePostAction(
+  postId: string,
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || (me.role !== "admin" && me.role !== "super_admin")) {
+    return { error: "Admin only." };
+  }
+
+  // Use service-role so we cleanly bypass any RLS on the update column.
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+  const { error } = await admin
+    .from("posts")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", postId);
+  if (error) return { error: error.message };
+  revalidatePath("/app/home");
+  return { success: true };
+}
 
 /**
  * On-demand mention search. Called by the feed composer / comment input

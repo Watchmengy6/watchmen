@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 
+// Tab order per Dustin's spec: Feed → Groups → Events → Chats → Profile.
+// "Chats" is the renamed DMs tab; the Master Chat is gone (everything
+// broadcast-style moves to the feed).
 const tabs = [
   { href: "/app/home", label: "Feed", Icon: HomeIcon },
-  { href: "/app/chat", label: "Chat", Icon: ChatIcon },
-  { href: "/app/dms", label: "DMs", Icon: DmIcon },
-  { href: "/app/events", label: "Events", Icon: EventIcon },
   { href: "/app/groups", label: "Groups", Icon: GroupsIcon },
+  { href: "/app/events", label: "Events", Icon: EventIcon },
+  { href: "/app/dms", label: "Chats", Icon: ChatIcon },
   { href: "/app/profile", label: "You", Icon: ProfileIcon },
 ];
 
@@ -58,8 +60,6 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
   }, []);
 
   // Hide on full-screen chat thread pages so the message input isn't covered.
-  // (We keep nav on /app/chat itself so users can navigate away — the
-  // focus-detection above hides it while they're typing.)
   const HIDE_ON = [
     /^\/app\/dms\/[^/]+$/,
     /^\/app\/groups\/[^/]+\/chat$/,
@@ -73,7 +73,7 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
       className="fixed bottom-0 left-0 right-0 z-50 bg-ink-900/70 backdrop-blur-xl border-t border-white/[0.05]"
       style={{ paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
     >
-      <div className="grid grid-cols-6 pt-1.5">
+      <div className="grid grid-cols-5 pt-1.5">
         {tabs.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (

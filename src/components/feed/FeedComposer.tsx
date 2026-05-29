@@ -167,10 +167,13 @@ export function FeedComposer({
     <div className="rounded-2xl bg-ink-800/80 hairline p-3">
       <div className="flex items-center gap-3">
         <Avatar name={meName} src={meAvatarUrl ?? undefined} size={36} />
+        {/* Gold gradient pill so the composer pops instead of blending
+            in. Per Dustin — more obvious composer = more posts. */}
         <button
           onClick={() => setOpen(true)}
-          className="flex-1 h-10 rounded-full bg-ink-900/60 hairline px-4 text-left text-ink-400 text-[14px]"
+          className="flex-1 h-11 rounded-full bg-gradient-to-r from-gold-400/20 via-gold-500/15 to-gold-700/0 ring-1 ring-gold-500/40 px-4 text-left text-gold-100 text-[14px] font-medium flex items-center gap-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         >
+          <span className="text-gold-300 text-base leading-none">＋</span>
           Share something with the room…
         </button>
       </div>
