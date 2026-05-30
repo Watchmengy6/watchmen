@@ -24,7 +24,7 @@ export default async function MemberProfile({ params }: { params: { userId: stri
   const { data: m } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, profile_photo_url, bio, occupation, company, instagram_url, interests, role, status, points_total, invited_by_user_id, created_at, last_active_at, venmo_username, cashapp_username, username, birthday, spouse, kids, membership_date",
+      "id, full_name, profile_photo_url, bio, occupation, company, instagram_url, interests, role, status, points_total, invited_by_user_id, created_at, last_active_at, venmo_username, cashapp_username, username, birthday, spouse, kids, membership_date, email, phone",
     )
     .eq("id", params.userId)
     .maybeSingle();
@@ -169,6 +169,38 @@ export default async function MemberProfile({ params }: { params: { userId: stri
           </div>
         </CardBody>
       </Card>
+
+      {/* Contact — visible to every approved brother per Dustin. The
+          email + phone columns were re-granted in migration 00022. */}
+      {(m.email || m.phone) ? (
+        <Card>
+          <CardBody>
+            <div className="text-[11px] tracking-[0.25em] uppercase text-ink-300 mb-2">
+              Contact
+            </div>
+            <div className="space-y-2 text-[14px]">
+              {m.email ? (
+                <a
+                  href={`mailto:${m.email}`}
+                  className="flex items-center gap-2 text-ink-100 hover:text-white"
+                >
+                  <span className="text-ink-400 text-[12px] w-14">Email</span>
+                  <span className="truncate">{m.email}</span>
+                </a>
+              ) : null}
+              {m.phone ? (
+                <a
+                  href={`tel:${m.phone}`}
+                  className="flex items-center gap-2 text-ink-100 hover:text-white"
+                >
+                  <span className="text-ink-400 text-[12px] w-14">Phone</span>
+                  <span className="truncate">{m.phone}</span>
+                </a>
+              ) : null}
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
 
       {familyBits.length > 0 || m.birthday ? (
         <Card>

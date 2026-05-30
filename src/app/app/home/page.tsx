@@ -59,7 +59,6 @@ export default async function HomePage() {
   // byte. Running in parallel is the single biggest win here.
   const [
     { data: nextEvent },
-    { data: nextMeetup },
     pendingRes,
     { count: unread },
     { data: joinedGroups },
@@ -67,21 +66,11 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, event_date, start_time, location_name")
+      .select("id, title, event_date, start_time, location_name, image_url")
       .eq("status", "published")
       .gte("event_date", today)
       .order("event_date", { ascending: true })
       .order("start_time", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    // Next upcoming meetup for the second hero banner.
-    supabase
-      .from("meetups")
-      .select(
-        "id, title, when_at, location_name, host:profiles!meetups_host_user_id_fkey(full_name)",
-      )
-      .gte("when_at", new Date().toISOString())
-      .order("when_at", { ascending: true })
       .limit(1)
       .maybeSingle(),
     isAdmin
@@ -315,75 +304,75 @@ export default async function HomePage() {
           </Link>
         ))}
 
-        {/* Next event banner */}
+        {/* Next event banner. If the event has a hero image we render
+            it as a full-width header with a dark gradient over the
+            bottom for readability; otherwise we fall back to the
+            compact row layout with a date tile. */}
         {nextEvent ? (
           <Link href={`/app/events/${nextEvent.id}`} className="block">
-            <div className="rounded-2xl bg-gradient-to-r from-gold-500/10 to-gold-700/0 ring-1 ring-gold-500/20 px-4 py-3 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gold-500/20 ring-1 ring-gold-500/30 flex flex-col items-center justify-center shrink-0">
-                <div className="text-[9px] uppercase tracking-wider text-gold-200 leading-none">
-                  {new Date(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
-                </div>
-                <div className="text-[15px] font-bold text-white leading-none mt-0.5">
-                  {new Date(nextEvent.event_date).getDate()}
+            {nextEvent.image_url ? (
+              <div className="relative rounded-2xl overflow-hidden ring-1 ring-gold-500/30 aspect-[16/9]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={nextEvent.image_url}
+                  alt=""
+                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                {/* Dark gradient overlay so text stays readable */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                {/* Date tile + caption pinned to bottom */}
+                <div className="absolute inset-x-0 bottom-0 p-3 flex items-end gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-gold-500/30 ring-1 ring-gold-400/50 backdrop-blur-md flex flex-col items-center justify-center shrink-0">
+                    <div className="text-[9px] uppercase tracking-wider text-gold-100 leading-none">
+                      {new Date(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
+                    </div>
+                    <div className="text-[16px] font-bold text-white leading-none mt-0.5">
+                      {new Date(nextEvent.event_date).getDate()}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10.5px] uppercase tracking-[0.2em] text-gold-300/90">
+                      Next Event
+                    </div>
+                    <div className="text-white text-[15px] font-semibold truncate">
+                      {nextEvent.title}
+                    </div>
+                    <div className="text-white/80 text-[12px] truncate">
+                      {fmtTime(nextEvent.start_time)}
+                      {nextEvent.location_name ? ` · ${nextEvent.location_name}` : ""}
+                    </div>
+                  </div>
+                  <div className="text-white/70 text-sm">›</div>
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10.5px] uppercase tracking-[0.2em] text-gold-300/80">
-                  Next Event
-                </div>
-                <div className="text-white text-[14px] font-semibold truncate">
-                  {nextEvent.title}
-                </div>
-                <div className="text-ink-300 text-[12px] truncate">
-                  {fmtTime(nextEvent.start_time)}
-                  {nextEvent.location_name ? ` · ${nextEvent.location_name}` : ""}
-                </div>
-              </div>
-              <div className="text-ink-300 text-sm">›</div>
-            </div>
-          </Link>
-        ) : null}
-
-        {/* Next meetup banner — informal coordinated get-together. Same
-            shape as the event banner but a touch dimmer so events stay
-            the headline. */}
-        {nextMeetup ? (() => {
-          const host = Array.isArray(nextMeetup.host)
-            ? nextMeetup.host[0]
-            : nextMeetup.host;
-          const when = new Date(nextMeetup.when_at);
-          return (
-            <Link href={`/app/meetups/${nextMeetup.id}`} className="block">
-              <div className="rounded-2xl bg-ink-800/80 ring-1 ring-white/[0.06] px-4 py-3 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-ink-700 ring-1 ring-white/[0.08] flex flex-col items-center justify-center shrink-0">
-                  <div className="text-[9px] uppercase tracking-wider text-ink-300 leading-none">
-                    {when.toLocaleString("en-US", { month: "short" })}
+            ) : (
+              <div className="rounded-2xl bg-gradient-to-r from-gold-500/10 to-gold-700/0 ring-1 ring-gold-500/20 px-4 py-3 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-gold-500/20 ring-1 ring-gold-500/30 flex flex-col items-center justify-center shrink-0">
+                  <div className="text-[9px] uppercase tracking-wider text-gold-200 leading-none">
+                    {new Date(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
                   </div>
                   <div className="text-[15px] font-bold text-white leading-none mt-0.5">
-                    {when.getDate()}
+                    {new Date(nextEvent.event_date).getDate()}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10.5px] uppercase tracking-[0.2em] text-ink-400">
-                    Next Meetup{host?.full_name ? ` · ${host.full_name}` : ""}
+                  <div className="text-[10.5px] uppercase tracking-[0.2em] text-gold-300/80">
+                    Next Event
                   </div>
                   <div className="text-white text-[14px] font-semibold truncate">
-                    {nextMeetup.title}
+                    {nextEvent.title}
                   </div>
                   <div className="text-ink-300 text-[12px] truncate">
-                    {when.toLocaleString("en-US", {
-                      weekday: "short",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                    {nextMeetup.location_name ? ` · ${nextMeetup.location_name}` : ""}
+                    {fmtTime(nextEvent.start_time)}
+                    {nextEvent.location_name ? ` · ${nextEvent.location_name}` : ""}
                   </div>
                 </div>
                 <div className="text-ink-300 text-sm">›</div>
               </div>
-            </Link>
-          );
-        })() : null}
+            )}
+          </Link>
+        ) : null}
 
         {/* Composer */}
         <FeedComposer
