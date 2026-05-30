@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireApproved } from "@/lib/auth/gates";
+import { supabaseServer } from "@/lib/supabase/server";
 import { ProfileEditor } from "./ProfileEditor";
 import { logoutAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +13,10 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage() {
   const { profile, user } = await requireApproved();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const supabase = supabaseServer();
+  const { data: memberNumber } = await supabase.rpc("watchmen_member_number", {
+    p_profile_id: profile.id,
+  });
 
   return (
     <div className="pb-10" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
@@ -24,6 +29,14 @@ export default async function ProfilePage() {
         </h1>
         <p className="mt-1 text-ink-300 text-sm">
           {profile.points_total} points · {profile.role === "super_admin" ? "Super Admin" : profile.role === "admin" ? "Admin" : "Member"}
+          {typeof memberNumber === "number" ? (
+            <>
+              {" · "}
+              <span className="text-gold-300/90">
+                Watchmen #{String(memberNumber).padStart(3, "0")}
+              </span>
+            </>
+          ) : null}
         </p>
       </div>
 

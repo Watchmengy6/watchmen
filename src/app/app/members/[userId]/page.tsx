@@ -33,6 +33,12 @@ export default async function MemberProfile({ params }: { params: { userId: stri
   // Non-admin viewers can only see approved members.
   if (!isAdmin && m.status !== "approved") notFound();
 
+  // Watchmen member number — sequential by join order. Computed via the
+  // SECURITY DEFINER RPC so the rank stays stable across viewers.
+  const { data: memberNumber } = await supabase.rpc("watchmen_member_number", {
+    p_profile_id: m.id,
+  });
+
   // Has the viewer already blocked this member? Used to render the
   // block / unblock toggle. Self-view skips the moderation row entirely.
   const isSelf = m.id === me.id;
@@ -102,6 +108,11 @@ export default async function MemberProfile({ params }: { params: { userId: stri
           </div>
           <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
             <Badge variant="gold">{m.points_total} pts</Badge>
+            {typeof memberNumber === "number" ? (
+              <Badge variant="muted">
+                Watchmen #{String(memberNumber).padStart(3, "0")}
+              </Badge>
+            ) : null}
             {m.status !== "approved" ? (
               <Badge variant="muted">{m.status}</Badge>
             ) : null}

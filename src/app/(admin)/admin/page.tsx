@@ -1,23 +1,41 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { Card, CardBody } from "@/components/ui/Card";
+import { Avatar } from "@/components/ui/Avatar";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
   const supabase = supabaseServer();
-  const [{ count: pending }, { count: members }, { count: events }, { data: topInviters }] =
-    await Promise.all([
-      supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "pending"),
-      supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "approved"),
-      supabase.from("events").select("*", { count: "exact", head: true }),
-      supabase
-        .from("profiles")
-        .select("id, full_name, points_total, profile_photo_url")
-        .eq("status", "approved")
-        .order("points_total", { ascending: false })
-        .limit(5),
-    ]);
+  const [
+    { count: pending },
+    { count: members },
+    { count: events },
+    { data: topInviters },
+    { data: birthdayPool },
+  ] = await Promise.all([
+    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "approved"),
+    supabase.from("events").select("*", { count: "exact", head: true }),
+    supabase
+      .from("profiles")
+      .select("id, full_name, points_total, profile_photo_url")
+      .eq("status", "approved")
+      .order("points_total", { ascending: false })
+      .limit(5),
+    // Pull every approved member with a birthday set. Postgres can't
+    // sort by "days until next birthday" without a clunky expression
+    // index, and the member count is small — easier to compute in JS.
+    supabase
+      .from("profiles")
+      .select("id, full_name, profile_photo_url, birthday")
+      .eq("status", "approved")
+      .not("birthday", "is", null),
+  ]);
+
+  // Compute next-birthday occurrence + days-until for each member, keep
+  // anyone whose next birthday is within 30 days, sort soonest first.
+  const upcomingBirthdays = computeUpcomingBirthdays(birthdayPool ?? [], 30, 10);
 
   return (
     <div className="px-5 space-y-4">
@@ -26,6 +44,50 @@ export default async function AdminHome() {
         <Tile href="/admin/members" value={members ?? 0} label="Members" />
         <Tile href="/admin/events" value={events ?? 0} label="Events" />
       </div>
+
+      {/* Upcoming birthdays — next 30 days. The home feed already fires
+          an automated post on the day; this card gives admins a heads
+          up so they can plan ahead. */}
+      {upcomingBirthdays.length > 0 ? (
+        <Card>
+          <CardBody>
+            <div className="text-[11px] tracking-[0.25em] uppercase text-ink-300 mb-2">
+              Upcoming Birthdays
+            </div>
+            <div className="-mx-1">
+              {upcomingBirthdays.map((b) => (
+                <Link
+                  key={b.id}
+                  href={`/app/members/${b.id}`}
+                  className="flex items-center gap-3 px-1 py-2 border-b border-white/[0.05] last:border-0"
+                >
+                  <Avatar src={b.profile_photo_url ?? undefined} name={b.full_name} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-[14px] font-semibold truncate">
+                      {b.full_name}
+                    </div>
+                    <div className="text-ink-300 text-[12px]">{b.dateLabel}</div>
+                  </div>
+                  <div className="text-right">
+                    <div
+                      className={
+                        b.daysUntil === 0
+                          ? "text-gold-300 text-[13px] font-semibold"
+                          : "text-ink-200 text-[13px]"
+                      }
+                    >
+                      {b.daysUntil === 0 ? "Today 🎂" : `${b.daysUntil}d`}
+                    </div>
+                    {b.turning ? (
+                      <div className="text-ink-400 text-[11px]">turns {b.turning}</div>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardBody>
@@ -67,6 +129,55 @@ export default async function AdminHome() {
       </Card>
     </div>
   );
+}
+
+/**
+ * For each member with a birthday set, compute when their next birthday
+ * lands (this year if it hasn't passed, otherwise next year), how many
+ * days away that is, and how old they'll turn (if their birthday year
+ * is set — old enough to compute an age from). Filter to within
+ * `windowDays`, sort soonest first, slice to `max`.
+ */
+function computeUpcomingBirthdays(
+  rows: { id: string; full_name: string; profile_photo_url: string | null; birthday: string | null }[],
+  windowDays: number,
+  max: number,
+) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const thisYear = today.getFullYear();
+
+  return rows
+    .map((r) => {
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(r.birthday ?? "");
+      if (!match) return null;
+      const birthYear = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      // Next occurrence — this year if today is still on/before it,
+      // otherwise next year.
+      let next = new Date(thisYear, month - 1, day);
+      if (next < today) next = new Date(thisYear + 1, month - 1, day);
+      const daysUntil = Math.round((next.getTime() - today.getTime()) / 86_400_000);
+      const turning =
+        birthYear && birthYear > 1900 ? next.getFullYear() - birthYear : null;
+      const dateLabel = next.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
+      return {
+        id: r.id,
+        full_name: r.full_name,
+        profile_photo_url: r.profile_photo_url,
+        daysUntil,
+        turning,
+        dateLabel,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null && r.daysUntil <= windowDays)
+    .sort((a, b) => a.daysUntil - b.daysUntil)
+    .slice(0, max);
 }
 
 function Tile({
