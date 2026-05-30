@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
 import { EnablePushButton } from "@/components/push/EnablePushButton";
 import { DeleteAccountButton } from "@/components/account/DeleteAccountButton";
+import { InviteLinkBox } from "@/app/app/invite/InviteLinkBox";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,11 @@ export default async function ProfilePage() {
   const { data: memberNumber } = await supabase.rpc("watchmen_member_number", {
     p_profile_id: profile.id,
   });
+
+  // Personal invite link — every brother has their own permanent invite
+  // code on profile.invite_code (kept private to the user via me_full).
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const inviteLink = `${siteUrl}/invite/${profile.invite_code}`;
 
   return (
     <div className="pb-10" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
@@ -77,6 +83,18 @@ export default async function ProfilePage() {
           </Card>
         </div>
       ) : null}
+
+      {/* Personal invite link — every member can hand this to brothers
+          they trust. Admin still has to approve the signup. */}
+      <div className="px-5 mt-8 space-y-2">
+        <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">
+          Invite a Brother
+        </div>
+        <InviteLinkBox link={inviteLink} />
+        <p className="text-[11.5px] text-ink-400 leading-relaxed">
+          Share with men you trust. They land on a private welcome screen and Dustin reviews every request. You earn <span className="text-gold-300 font-semibold">+50 points</span> when they're approved.
+        </p>
+      </div>
 
       {/* Push notifications */}
       <div className="px-5 mt-8 space-y-2">
