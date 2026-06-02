@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireApproved } from "@/lib/auth/gates";
 import { createGroupAction } from "@/lib/groups/actions";
 import { GroupCoverInput } from "./GroupCoverInput";
+import { GroupKindPicker } from "./GroupKindPicker";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function NewGroupPage() {
         </div>
       </div>
       <form action={createGroupAction} className="px-4 pt-4 space-y-4">
+        <GroupKindPicker />
         <GroupCoverInput />
         <Field label="Name" name="name" placeholder="What's the group called?" required />
         <Field

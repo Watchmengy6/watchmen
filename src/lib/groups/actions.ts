@@ -15,6 +15,8 @@ const CATEGORIES = [
   "other",
 ] as const;
 
+const KINDS = ["group", "meetup", "hobby"] as const;
+
 function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -30,6 +32,9 @@ export async function createGroupAction(formData: FormData): Promise<void> {
   const category = (CATEGORIES as readonly string[]).includes(categoryRaw)
     ? categoryRaw
     : "other";
+  // kind = the color-coded flavor (group / meetup / hobby) from migration 00029.
+  const kindRaw = String(formData.get("kind") ?? "group").trim();
+  const kind = (KINDS as readonly string[]).includes(kindRaw) ? kindRaw : "group";
   const coverUrl = String(formData.get("cover_url") ?? "").trim() || null;
   if (!name) return;
 
@@ -73,6 +78,7 @@ export async function createGroupAction(formData: FormData): Promise<void> {
       slug,
       description,
       category,
+      kind,
       cover_url: coverUrl,
       created_by: me.id,
     })
