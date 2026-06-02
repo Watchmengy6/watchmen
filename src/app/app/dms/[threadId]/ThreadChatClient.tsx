@@ -6,6 +6,7 @@ import { sendThreadMessageAction } from "@/lib/dms/actions";
 import { loadOlderThreadMessagesAction } from "@/lib/dms/pagination";
 import { createBrowserClient } from "@supabase/ssr";
 import { uploadMedia } from "@/lib/uploads/client";
+import { ReportButton } from "@/components/moderation/ReportButton";
 
 interface Msg {
   id: string;
@@ -367,6 +368,17 @@ export function ThreadChatClient({
                       }
                     >
                       {m.body}
+                    </div>
+                  ) : null}
+                  {/* Per-message Report — only on someone else's message.
+                      Apple requires every UGC surface to have reporting. */}
+                  {!m.is_me ? (
+                    <div className="mt-0.5 flex justify-start">
+                      <ReportButton
+                        target={{ kind: "thread_message", id: m.id }}
+                        className="text-ink-400 text-[10px] hover:text-ink-200"
+                        label="Report"
+                      />
                     </div>
                   ) : null}
                 </div>

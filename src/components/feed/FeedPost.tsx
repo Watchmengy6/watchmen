@@ -385,8 +385,19 @@ export function FeedPost({
                     <Avatar src={c.user_photo ?? undefined} name={c.user_name} size={28} />
                   </Link>
                   <div className="flex-1 min-w-0 rounded-2xl bg-ink-800 hairline px-3 py-2">
-                    <div className="text-[12.5px] font-semibold text-white">
-                      {c.user_name}
+                    <div className="flex items-start gap-2">
+                      <div className="text-[12.5px] font-semibold text-white flex-1 truncate">
+                        {c.user_name}
+                      </div>
+                      {/* Per-comment Report — Apple-required for any
+                          user-generated content. Hidden when it's your
+                          own comment. */}
+                      {c.user_id && c.user_id !== post.author.id ? null : null}
+                      <ReportButton
+                        target={{ kind: "comment", id: c.id }}
+                        className="text-ink-400 text-[10.5px] hover:text-white shrink-0"
+                        label="Report"
+                      />
                     </div>
                     <div className="text-[14px] text-ink-100 leading-snug mt-0.5">
                       <RichText text={c.body} />

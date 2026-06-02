@@ -7,7 +7,7 @@ import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { Logo } from "@/components/brand/Logo";
 import { AdminPill } from "@/components/admin/AdminPill";
 import { fmtTime } from "@/lib/utils/date";
-import { localTodayISO } from "@/lib/utils/localDate";
+import { localTodayISO, parseLocalDate } from "@/lib/utils/localDate";
 import { createPostAction } from "@/lib/feed/actions";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
 
@@ -22,31 +22,21 @@ export default async function HomePage() {
   // the next-event banner doesn't flip a day early after 8 PM Tampa.
   const today = localTodayISO();
 
-  // Birthdays today — used for the celebratory banner. We also book an
-  // auto feed post via the SECURITY DEFINER RPC (idempotent: unique on
-  // member_id + posted_for_date so concurrent renders dedupe at the DB).
-  // Computing in JS avoids a synchronous DB roundtrip per home render.
-  const { data: birthdayCandidates } = await supabase
-    .from("profiles")
-    .select("id, full_name, profile_photo_url, birthday")
-    .eq("status", "approved")
-    .not("birthday", "is", null);
-  const todayLocal = new Date();
-  const birthdaysToday = (birthdayCandidates ?? []).filter((p: any) => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(p.birthday ?? "");
-    if (!m) return false;
-    return (
-      Number(m[2]) === todayLocal.getMonth() + 1 &&
-      Number(m[3]) === todayLocal.getDate()
-    );
-  });
+  // Birthdays today — filtered in Postgres in Tampa time so we don't
+  // pull every birthday profile and the result doesn't drift when the
+  // server clock isn't Eastern. The RPC returns only the matching rows.
+  const { data: birthdayRows } = await supabase.rpc("birthdays_today");
+  const birthdaysToday: { id: string; full_name: string; profile_photo_url: string | null }[] =
+    (birthdayRows ?? []) as any[];
+
   // Fire-and-forget book the auto-post for each birthday member. The RPC
-  // is idempotent, so multiple home renders won't create dupes.
+  // is idempotent (unique on member_id + posted_for_date), so multiple
+  // home renders won't create dupes.
   if (birthdaysToday.length > 0) {
     void (async () => {
       try {
         await Promise.all(
-          birthdaysToday.map((b: any) =>
+          birthdaysToday.map((b) =>
             supabase.rpc("book_birthday_auto_post", { p_member_id: b.id }),
           ),
         );
@@ -357,10 +347,10 @@ export default async function HomePage() {
                 <div className="absolute inset-x-0 bottom-0 p-3 flex items-end gap-3">
                   <div className="h-12 w-12 rounded-xl bg-gold-500/30 ring-1 ring-gold-400/50 backdrop-blur-md flex flex-col items-center justify-center shrink-0">
                     <div className="text-[9px] uppercase tracking-wider text-gold-100 leading-none">
-                      {new Date(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
+                      {parseLocalDate(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
                     </div>
                     <div className="text-[16px] font-bold text-white leading-none mt-0.5">
-                      {new Date(nextEvent.event_date).getDate()}
+                      {parseLocalDate(nextEvent.event_date).getDate()}
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -382,10 +372,10 @@ export default async function HomePage() {
               <div className="rounded-2xl bg-gradient-to-r from-gold-500/10 to-gold-700/0 ring-1 ring-gold-500/20 px-4 py-3 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-gold-500/20 ring-1 ring-gold-500/30 flex flex-col items-center justify-center shrink-0">
                   <div className="text-[9px] uppercase tracking-wider text-gold-200 leading-none">
-                    {new Date(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
+                    {parseLocalDate(nextEvent.event_date).toLocaleString("en-US", { month: "short" })}
                   </div>
                   <div className="text-[15px] font-bold text-white leading-none mt-0.5">
-                    {new Date(nextEvent.event_date).getDate()}
+                    {parseLocalDate(nextEvent.event_date).getDate()}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">

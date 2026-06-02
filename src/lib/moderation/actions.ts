@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendPushToAdmins } from "@/lib/push/send";
 
 export type ReportTarget =
   | { kind: "user"; id: string }
@@ -54,6 +55,22 @@ export async function fileReportAction(input: {
 
   const { error } = await supabase.from("reports").insert(row);
   if (error) return { error: error.message };
+
+  // Fire-and-forget admin push so leadership sees the report land in
+  // real time. The /admin/reports queue is the deep-link target.
+  void (async () => {
+    try {
+      await sendPushToAdmins({
+        title: "New report filed",
+        body: `Reason: ${reason}. Tap to review.`,
+        url: "/admin/reports",
+        tag: "admin-report",
+      });
+    } catch (e) {
+      console.warn("[reports] admin push failed (non-fatal)", e);
+    }
+  })();
+
   return { success: true };
 }
 

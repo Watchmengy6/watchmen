@@ -79,6 +79,7 @@ export default async function ProfilePage() {
               <AdminLink href="/admin/members" label="Members" sub="Manage roles" />
               <AdminLink href="/admin/events" label="Events" sub="Create & edit events" />
               <AdminLink href="/admin/partnerships" label="Partnerships" sub="Manage partner discounts" />
+              <AdminLink href="/admin/reports" label="Reports" sub="Review member-filed reports" />
               <AdminLink href="/admin/leaderboard" label="Leaderboard" sub="Audit point activity" last />
             </CardBody>
           </Card>

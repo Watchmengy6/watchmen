@@ -11,6 +11,7 @@ export default async function AdminHome() {
     { count: pending },
     { count: members },
     { count: events },
+    { count: pendingReports },
     { data: topInviters },
     { data: birthdayPool },
     { data: admins },
@@ -18,6 +19,7 @@ export default async function AdminHome() {
     supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "approved"),
     supabase.from("events").select("*", { count: "exact", head: true }),
+    supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "pending"),
     supabase
       .from("profiles")
       .select("id, full_name, points_total, profile_photo_url")
@@ -64,8 +66,9 @@ export default async function AdminHome() {
 
   return (
     <div className="px-5 space-y-4">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <Tile href="/admin/pending" value={pending ?? 0} label="Pending" highlight={(pending ?? 0) > 0} />
+        <Tile href="/admin/reports" value={pendingReports ?? 0} label="Reports" highlight={(pendingReports ?? 0) > 0} />
         <Tile href="/admin/members" value={members ?? 0} label="Members" />
         <Tile href="/admin/events" value={events ?? 0} label="Events" />
       </div>
