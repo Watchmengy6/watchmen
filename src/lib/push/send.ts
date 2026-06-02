@@ -91,6 +91,34 @@ export async function sendPushToUser(opts: {
 }
 
 /**
+ * Super-admin firehose. Per Dustin: he wants a push for every feed
+ * post, comment, event RSVP, poll vote, group/event-room message —
+ * everything except 1:1 private DMs. Caller passes the actor (so we
+ * can skip pushing when the super-admin is the one doing the action).
+ *
+ * Failures are swallowed; this should always be fire-and-forget so the
+ * triggering action returns instantly.
+ */
+export async function sendPushToSuperAdmins(opts: {
+  payload: PushPayload;
+  /** Profile id of whoever triggered the event, so we don't push them their own action. */
+  actorProfileId?: string;
+}): Promise<void> {
+  const supabase = svc();
+  const { data: supers } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "super_admin")
+    .eq("status", "approved");
+  if (!supers || supers.length === 0) return;
+  await Promise.all(
+    supers
+      .filter((s) => s.id !== opts.actorProfileId)
+      .map((s) => sendPushToUser({ userId: s.id, payload: opts.payload })),
+  );
+}
+
+/**
  * Send the same payload to every approved admin. Logs each step so we
  * can debug from Vercel why a signup push didn't land (most common
  * cause: the admin never enabled push on the device they expect it on).

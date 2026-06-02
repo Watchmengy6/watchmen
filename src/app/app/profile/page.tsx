@@ -84,6 +84,29 @@ export default async function ProfilePage() {
         </div>
       ) : null}
 
+      {/* Digital Member Card link — a "Watchmen Member" credential
+          brothers can pull up at partner businesses or share. */}
+      <div className="px-5 mt-8 space-y-2">
+        <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">
+          Member Card
+        </div>
+        <Link
+          href="/app/profile/card"
+          className="block rounded-2xl bg-gradient-to-br from-[#f0d57a]/30 via-[#c79b3b]/20 to-[#8a6210]/10 ring-1 ring-gold-300/40 px-4 py-3 flex items-center gap-3 active:opacity-90"
+        >
+          <div className="h-10 w-14 rounded-md bg-gradient-to-br from-[#f0d57a] to-[#8a6210] ring-1 ring-gold-300/40 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-white text-[14px] font-semibold">
+              Show your card
+            </div>
+            <div className="text-ink-300 text-[12px]">
+              Tap to view + share your Watchmen credential
+            </div>
+          </div>
+          <div className="text-ink-300 text-sm">›</div>
+        </Link>
+      </div>
+
       {/* Personal invite link — every member can hand this to brothers
           they trust. Admin still has to approve the signup. */}
       <div className="px-5 mt-8 space-y-2">

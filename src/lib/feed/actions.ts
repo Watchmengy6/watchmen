@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
-import { sendPushToUser } from "@/lib/push/send";
+import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
 
 /**
  * Cast (or change) a vote on a feed poll. One vote per member per
@@ -51,6 +51,31 @@ export async function votePollAction(input: {
       { onConflict: "post_id,user_id" },
     );
   if (error) return { error: error.message };
+
+  // Super-admin firehose: low-signal but Dustin asked for it.
+  void (async () => {
+    try {
+      const optionLabel =
+        (post.poll_options as string[])[input.optionIndex] ?? "an option";
+      const { data: meProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", me.id)
+        .maybeSingle();
+      await sendPushToSuperAdmins({
+        actorProfileId: me.id,
+        payload: {
+          title: `${meProfile?.full_name ?? "A brother"} voted`,
+          body: `"${optionLabel}"`,
+          url: "/app/home",
+          tag: `poll-vote:${input.postId}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[poll.vote] super-admin push failed", e);
+    }
+  })();
+
   revalidatePath("/app/home");
   return { success: true };
 }
@@ -239,6 +264,30 @@ export async function createPostAction(
 
   if (error) return { error: error.message };
 
+  // Super-admin firehose: fire-and-forget push on every new post.
+  void (async () => {
+    try {
+      const { data: meProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", me.id)
+        .maybeSingle();
+      const senderName = meProfile?.full_name ?? "A brother";
+      const preview = body.length > 100 ? `${body.slice(0, 97)}…` : body;
+      await sendPushToSuperAdmins({
+        actorProfileId: me.id,
+        payload: {
+          title: `${senderName} posted`,
+          body: preview,
+          url: "/app/home",
+          tag: `post:${post.id}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[post.create] super-admin push failed", e);
+    }
+  })();
+
   // Parse @mentions out of body and write to post_mentions.
   // Usernames are always lowercased at write time and may contain hyphens
   // (collision suffixes), so allow [\w-] and lowercase before lookup.
@@ -373,6 +422,24 @@ export async function addCommentAction(
   if (error) return { error: error.message };
 
   await awardPoints({ userId: me.id, action: "comment_added", meta: { post_id: postId, comment_id: row.id } });
+
+  // Super-admin firehose — every comment pings Dustin.
+  void (async () => {
+    try {
+      const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
+      await sendPushToSuperAdmins({
+        actorProfileId: me.id,
+        payload: {
+          title: `${me.full_name} commented`,
+          body: preview,
+          url: "/app/home",
+          tag: `comment:${row.id}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[comment.add] super-admin push failed", e);
+    }
+  })();
 
   // Parse @mentions, write post_mentions rows, and push the mentioned brothers.
   const mentionedUsernames = Array.from(

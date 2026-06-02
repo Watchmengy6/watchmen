@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { sendPushToUser } from "@/lib/push/send";
+import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
 
 /** Start (or open) a DM thread with the given member. */
 export async function startDmAction(formData: FormData) {
@@ -109,6 +109,24 @@ export async function sendThreadMessageAction(
             }),
           ),
       );
+
+      // Super-admin firehose for group + event chats only. Private
+      // 1:1 DMs are excluded for privacy (Dustin's call). The push to
+      // thread members above already covers super-admins when they're
+      // members of the thread; this branch covers cases where they're
+      // not a thread member but still want signal.
+      if (thread?.kind === "group" || thread?.kind === "event") {
+        await sendPushToSuperAdmins({
+          actorProfileId: me.id,
+          payload: {
+            title,
+            body: previewBody,
+            url,
+            tag: `thread:${threadId}`,
+            renotify: true,
+          },
+        });
+      }
     } catch (e) {
       console.warn("[dm] push notify failed (non-fatal)", e);
     }

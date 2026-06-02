@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
-import { sendPushToUser } from "@/lib/push/send";
+import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
 import type { RsvpStatus } from "@/types/database";
 
 export async function rsvpAction(eventId: string, status: RsvpStatus) {
@@ -43,6 +43,38 @@ export async function rsvpAction(eventId: string, status: RsvpStatus) {
   if (error) return { error: error.message };
 
   const awardedPoints = !wasGoing && status === "going";
+
+  // Super-admin firehose. Skip if Dustin is RSVPing his own event.
+  void (async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+      const { data: ev } = await supabase
+        .from("events")
+        .select("title")
+        .eq("id", eventId)
+        .maybeSingle();
+      const verb = status === "going" ? "is going to" : status === "maybe" ? "might attend" : "passed on";
+      await sendPushToSuperAdmins({
+        actorProfileId: me?.id,
+        payload: {
+          title: `${me?.full_name ?? "A brother"} ${verb}`,
+          body: ev?.title ?? "an event",
+          url: `/app/events/${eventId}`,
+          tag: `rsvp:${eventId}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[event.rsvp] super-admin push failed", e);
+    }
+  })();
 
   revalidatePath(`/app/events/${eventId}`);
   revalidatePath(`/app/events`);
