@@ -24,7 +24,6 @@ export default async function EventsPage({
   const tab: Tab = searchParams?.tab === "calendar" ? "calendar" : "events";
 
   const today = localTodayISO();
-  const nowIso = new Date().toISOString();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   // Pull what each tab needs. Events tab fetches the list. Calendar
@@ -141,26 +140,14 @@ export default async function EventsPage({
     });
   }
 
-  // Counts for the tab pills.
-  const [{ count: eventsCount }, { count: meetupCount }, { count: bdayCount }] =
-    await Promise.all([
-      supabase
-        .from("events")
-        .select("*", { count: "exact", head: true })
-        .gte("event_date", today)
-        .eq("status", "published"),
-      supabase
-        .from("meetups")
-        .select("*", { count: "exact", head: true })
-        .gte("when_at", nowIso),
-      supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "approved")
-        .not("birthday", "is", null),
-    ]);
-  const calendarCount =
-    (eventsCount ?? 0) + (meetupCount ?? 0) + (bdayCount ?? 0);
+  // Count for the Events pill only. Calendar pill has no number —
+  // the grid itself is the view, so a count next to the label was
+  // misleading (it would say "1" even on months with zero items).
+  const { count: eventsCount } = await supabase
+    .from("events")
+    .select("*", { count: "exact", head: true })
+    .gte("event_date", today)
+    .eq("status", "published");
 
   return (
     <div
@@ -192,7 +179,7 @@ export default async function EventsPage({
 
       <div className="flex gap-1.5">
         <TabPill href="/app/events?tab=events" label="Events" count={eventsCount ?? 0} active={tab === "events"} />
-        <TabPill href="/app/events?tab=calendar" label="Calendar" count={calendarCount} active={tab === "calendar"} />
+        <TabPill href="/app/events?tab=calendar" label="Calendar" count={0} active={tab === "calendar"} />
       </div>
 
       {tab === "calendar" ? (
