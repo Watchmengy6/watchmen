@@ -7,6 +7,55 @@ import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser } from "@/lib/push/send";
 
 /**
+ * Cast (or change) a vote on a feed poll. One vote per member per
+ * post — upserts on (post_id, user_id).
+ */
+export async function votePollAction(input: {
+  postId: string;
+  optionIndex: number;
+}): Promise<{ error?: string; success?: boolean }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return { error: "Approval required." };
+
+  if (!Number.isInteger(input.optionIndex) || input.optionIndex < 0 || input.optionIndex >= 10) {
+    return { error: "Invalid option." };
+  }
+
+  // Verify the option index is in range for this post's poll.
+  const { data: post } = await supabase
+    .from("posts")
+    .select("poll_options")
+    .eq("id", input.postId)
+    .maybeSingle();
+  if (!post?.poll_options || input.optionIndex >= post.poll_options.length) {
+    return { error: "Option not available." };
+  }
+
+  const { error } = await supabase
+    .from("post_poll_votes")
+    .upsert(
+      {
+        post_id: input.postId,
+        user_id: me.id,
+        option_index: input.optionIndex,
+      },
+      { onConflict: "post_id,user_id" },
+    );
+  if (error) return { error: error.message };
+  revalidatePath("/app/home");
+  return { success: true };
+}
+
+/**
  * Admin moderation: soft-delete any feed post (sets deleted_at).
  * Authors can also delete their own posts via a separate flow; this
  * one is the heavy hammer for leadership.
@@ -117,10 +166,11 @@ export async function createPostAction(
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return { error: "Say something." };
 
-  // Member "meetup" posts are stored as kind='post' with structured
-  // meetup_when_at / meetup_location fields. The post_kind enum stays
-  // unchanged — the renderer keys off the structured fields instead.
+  // Member "meetup" + "poll" posts are stored as kind='post' with extra
+  // structured columns. The post_kind enum stays unchanged — renderers
+  // key off the structured fields (meetup_when_at, poll_options).
   const isMeetupKind = kindRaw === "meetup";
+  const isPollKind = kindRaw === "poll";
   const kind = ["post", "job", "need", "announcement"].includes(kindRaw)
     ? (kindRaw as "post" | "job" | "need" | "announcement")
     : "post";
@@ -133,6 +183,22 @@ export async function createPostAction(
   const mediaType = (["none", "image", "video"].includes(mediaTypeRaw)
     ? mediaTypeRaw
     : "none") as "none" | "image" | "video";
+
+  // Parse poll fields (only present for type="poll").
+  let pollQuestion: string | null = null;
+  let pollOptions: string[] | null = null;
+  if (isPollKind) {
+    pollQuestion = String(formData.get("poll_question") ?? "").trim() || null;
+    const rawOptions = formData
+      .getAll("poll_option")
+      .map((v) => String(v).trim())
+      .filter((s) => s.length > 0)
+      .slice(0, 4);
+    if (!pollQuestion || rawOptions.length < 2) {
+      return { error: "Polls need a question and at least two options." };
+    }
+    pollOptions = rawOptions;
+  }
 
   // Parse the member-meetup when/where (only present for type="meetup").
   let meetupWhenAt: string | null = null;
@@ -165,6 +231,8 @@ export async function createPostAction(
       media_type: mediaType,
       meetup_when_at: meetupWhenAt,
       meetup_location: meetupLocation,
+      poll_question: pollQuestion,
+      poll_options: pollOptions,
     })
     .select("id")
     .single();

@@ -95,6 +95,7 @@ export default async function HomePage() {
       .from("posts")
       .select(
         `id, kind, body, created_at, media_url, meetup_when_at, meetup_location,
+         poll_question, poll_options,
          author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company, birthday),
          tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
          tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
@@ -111,11 +112,11 @@ export default async function HomePage() {
   const posts = postsRes.data;
   if (postsRes.error) console.error("[/app/home] posts query failed", postsRes.error);
 
-  // Phase 2: likes, my-likes, and comment previews for the posts we just got.
-  // (Comment-count fan-out removed — the previously computed commentCount
-  // map was never consumed; comments.length is sourced from allComments.)
+  // Phase 2: likes, my-likes, comment previews, and poll votes for the
+  // posts we just got. (Comment-count fan-out removed earlier —
+  // comments.length sources from allComments.)
   const postIds = (posts ?? []).map((p: any) => p.id);
-  const [{ data: likeRows }, { data: myLikeRows }, { data: cs }] =
+  const [{ data: likeRows }, { data: myLikeRows }, { data: cs }, { data: pollVoteRows }] =
     postIds.length
       ? await Promise.all([
           supabase.from("post_likes").select("post_id").in("post_id", postIds),
@@ -132,8 +133,23 @@ export default async function HomePage() {
             .in("post_id", postIds)
             .is("deleted_at", null)
             .order("created_at", { ascending: true }),
+          supabase
+            .from("post_poll_votes")
+            .select("post_id, user_id, option_index")
+            .in("post_id", postIds),
         ])
-      : [{ data: [] }, { data: [] }, { data: [] }];
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+
+  // Tally poll votes per post + remember the viewer's own vote.
+  const pollTallies = new Map<string, number[]>();
+  const myPollVotes = new Map<string, number>();
+  (pollVoteRows ?? []).forEach((v: any) => {
+    const idx = v.option_index as number;
+    const arr = pollTallies.get(v.post_id) ?? [];
+    arr[idx] = (arr[idx] ?? 0) + 1;
+    pollTallies.set(v.post_id, arr);
+    if (v.user_id === profile.id) myPollVotes.set(v.post_id, idx);
+  });
 
   const likeCount = new Map<string, number>();
   (likeRows ?? []).forEach((r: any) => {
@@ -155,6 +171,15 @@ export default async function HomePage() {
     const tg = Array.isArray(p.tagged_group) ? p.tagged_group[0] : p.tagged_group;
     const te = Array.isArray(p.tagged_event) ? p.tagged_event[0] : p.tagged_event;
     const tm = Array.isArray(p.tagged_meetup) ? p.tagged_meetup[0] : p.tagged_meetup;
+    // Poll bookkeeping — pad the tally array to match the option count
+    // so the renderer can index safely even on a 0-vote option.
+    const pollOpts = (p.poll_options as string[] | null) ?? null;
+    const rawTally = pollTallies.get(p.id) ?? [];
+    const pollVotes = pollOpts
+      ? pollOpts.map((_: string, idx: number) => rawTally[idx] ?? 0)
+      : null;
+    const pollMyVote = myPollVotes.has(p.id) ? myPollVotes.get(p.id)! : null;
+
     return {
       id: p.id,
       type: (p.kind as any) ?? "post",
@@ -165,6 +190,11 @@ export default async function HomePage() {
       // renderer can show a card without resolving a meetup entity.
       meetup_when_at: p.meetup_when_at ?? null,
       meetup_location: p.meetup_location ?? null,
+      // Poll fields. poll_options null = not a poll.
+      poll_question: p.poll_question ?? null,
+      poll_options: pollOpts,
+      poll_votes: pollVotes,
+      poll_my_vote: pollMyVote,
       author: {
         id: author?.id ?? "",
         full_name: author?.full_name ?? "Brother",

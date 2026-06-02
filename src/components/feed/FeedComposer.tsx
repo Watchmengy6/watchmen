@@ -10,6 +10,7 @@ import { searchMembersForMention } from "@/lib/feed/actions";
 const types = [
   { id: "post", label: "Post" },
   { id: "meetup", label: "Meetup" },
+  { id: "poll", label: "Poll" },
   { id: "job", label: "Hiring" },
   { id: "need", label: "Need" },
 ] as const;
@@ -64,6 +65,10 @@ export function FeedComposer({
   // Member-meetup fields (only used when type === "meetup")
   const [meetupWhen, setMeetupWhen] = useState("");
   const [meetupWhere, setMeetupWhere] = useState("");
+  // Poll fields (only used when type === "poll"). Start with 2 empty
+  // options — members can add up to 4 total via the + button below.
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const router = useRouter();
   const taggedGroup = taggedGroupId
     ? taggableGroups.find((g) => g.id === taggedGroupId)
@@ -126,6 +131,8 @@ export function FeedComposer({
     setMediaType(null);
     setMeetupWhen("");
     setMeetupWhere("");
+    setPollQuestion("");
+    setPollOptions(["", ""]);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -146,12 +153,31 @@ export function FeedComposer({
   }
 
   function handlePost() {
-    if (!text.trim() || pending) return;
+    // Polls don't require body text — the question itself is the post.
+    // Everything else requires at least some text.
+    const requiresBody = type !== "poll";
+    if (requiresBody && !text.trim()) return;
+    if (pending) return;
     // Meetup posts require both fields — otherwise it's just a regular
     // post with the wrong label and no card to render.
     if (type === "meetup" && (!meetupWhen.trim() || !meetupWhere.trim())) {
       setErr("Meetup needs both when and where.");
       return;
+    }
+    // Polls need a question + at least two non-empty options.
+    let cleanedPollOptions: string[] = [];
+    if (type === "poll") {
+      if (!pollQuestion.trim()) {
+        setErr("Polls need a question.");
+        return;
+      }
+      cleanedPollOptions = pollOptions
+        .map((o) => o.trim())
+        .filter((o) => o.length > 0);
+      if (cleanedPollOptions.length < 2) {
+        setErr("Polls need at least two options.");
+        return;
+      }
     }
     if (!onSubmit) {
       // No server action wired — just reset (preview mode).
@@ -160,7 +186,9 @@ export function FeedComposer({
     }
     const fd = new FormData();
     fd.set("kind", type);
-    fd.set("body", text.trim());
+    // For polls we store the question as the body so the post still
+    // has searchable text and the existing rendering paths keep working.
+    fd.set("body", type === "poll" ? pollQuestion.trim() : text.trim());
     fd.set("tagged_group_id", taggedGroupId ?? "");
     fd.set("media_url", mediaUrl ?? "");
     fd.set("media_type", mediaType ?? "none");
@@ -173,6 +201,12 @@ export function FeedComposer({
         "tz_offset",
         formatTzOffset(new Date().getTimezoneOffset()),
       );
+    }
+    if (type === "poll") {
+      fd.set("poll_question", pollQuestion.trim());
+      // FormData supports multiple values for the same key; the server
+      // action reads them back with formData.getAll("poll_option").
+      cleanedPollOptions.forEach((o) => fd.append("poll_option", o));
     }
     startTransition(async () => {
       const result = await onSubmit(fd);
@@ -218,6 +252,72 @@ export function FeedComposer({
               </button>
             ))}
           </div>
+          {/* Poll-only fields: question + 2–4 options. Question goes
+              in place of the body, so we hide the textarea below. */}
+          {type === "poll" ? (
+            <div className="mb-2 space-y-2">
+              <div>
+                <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1">
+                  Question
+                </div>
+                <input
+                  type="text"
+                  value={pollQuestion}
+                  onChange={(e) => setPollQuestion(e.target.value)}
+                  placeholder="What does the room think?"
+                  maxLength={200}
+                  className="w-full h-10 rounded-xl bg-ink-900/60 hairline px-3 text-[13.5px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
+                />
+              </div>
+              <div>
+                <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1">
+                  Options
+                </div>
+                <div className="space-y-1.5">
+                  {pollOptions.map((opt, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={opt}
+                        onChange={(e) => {
+                          const next = [...pollOptions];
+                          next[idx] = e.target.value;
+                          setPollOptions(next);
+                        }}
+                        placeholder={`Option ${idx + 1}`}
+                        maxLength={80}
+                        className="flex-1 h-10 rounded-xl bg-ink-900/60 hairline px-3 text-[13.5px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
+                      />
+                      {pollOptions.length > 2 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPollOptions((prev) =>
+                              prev.filter((_, i) => i !== idx),
+                            )
+                          }
+                          className="h-10 w-10 rounded-xl bg-ink-900/60 hairline text-ink-300 text-base"
+                          aria-label="Remove option"
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                {pollOptions.length < 4 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPollOptions((prev) => [...prev, ""])}
+                    className="mt-2 h-8 px-3 rounded-full bg-ink-900/60 hairline text-ink-200 text-[12px]"
+                  >
+                    ＋ Add option
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {/* Meetup-only fields: when + where. Render above the textarea
               so it reads as "I'm doing X at Y, here's what it is." */}
           {type === "meetup" ? (
@@ -248,22 +348,26 @@ export function FeedComposer({
             </div>
           ) : null}
 
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={3}
-            placeholder={
-              type === "meetup"
-                ? "Who's around? Quick details — what is it, who should come?"
-                : type === "job"
-                  ? "Describe the role, location, and how to reach you. Tag with @"
-                  : type === "need"
-                    ? "What do you need? Tag a brother with @"
-                    : "What's on your mind? Tag with @"
-            }
-            className="w-full rounded-xl bg-ink-900/60 hairline px-3 py-2.5 text-[15px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 resize-none"
-          />
+          {/* Body textarea — hidden for polls because the question
+              already IS the body. */}
+          {type !== "poll" ? (
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={3}
+              placeholder={
+                type === "meetup"
+                  ? "Who's around? Quick details — what is it, who should come?"
+                  : type === "job"
+                    ? "Describe the role, location, and how to reach you. Tag with @"
+                    : type === "need"
+                      ? "What do you need? Tag a brother with @"
+                      : "What's on your mind? Tag with @"
+              }
+              className="w-full rounded-xl bg-ink-900/60 hairline px-3 py-2.5 text-[15px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 resize-none"
+            />
+          ) : null}
 
           {/* @ mention live picker */}
           {mentionMatches.length > 0 ? (

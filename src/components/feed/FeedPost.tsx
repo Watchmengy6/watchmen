@@ -13,6 +13,7 @@ import { RichText } from "@/components/feed/RichText";
 import { SharePostButton } from "@/components/feed/SharePostButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { AdminDeletePostButton } from "@/components/feed/AdminDeletePostButton";
+import { FeedPollWidget } from "@/components/feed/FeedPollWidget";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 
@@ -64,6 +65,11 @@ export interface FeedPostShape {
   /** Member-meetup post: when + where the brother wants to meet up. */
   meetup_when_at?: string | null;
   meetup_location?: string | null;
+  /** Poll post: question + ordered option list + per-option vote totals + my vote (if any). */
+  poll_question?: string | null;
+  poll_options?: string[] | null;
+  poll_votes?: number[] | null;
+  poll_my_vote?: number | null;
   likes: number;
   liked_by_me: boolean;
   comments: FeedPostComment[];
@@ -279,6 +285,17 @@ export function FeedPost({
               going={post.activity.going}
             />
           </div>
+        ) : null}
+
+        {/* Inline poll — votes upsert per-member, optimistic UI flips
+            bar percentages instantly. */}
+        {post.poll_options && post.poll_options.length > 0 ? (
+          <FeedPollWidget
+            postId={post.id}
+            options={post.poll_options}
+            initialVotes={post.poll_votes ?? post.poll_options.map(() => 0)}
+            initialMyVote={post.poll_my_vote ?? null}
+          />
         ) : null}
 
         {/* Member-meetup card — structured when/where data attached to a
