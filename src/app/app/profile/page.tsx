@@ -78,6 +78,7 @@ export default async function ProfilePage() {
               <AdminLink href="/admin/pending" label="Pending approvals" sub="Approve new brothers" />
               <AdminLink href="/admin/members" label="Members" sub="Manage roles" />
               <AdminLink href="/admin/events" label="Events" sub="Create & edit events" />
+              <AdminLink href="/admin/partnerships" label="Partnerships" sub="Manage partner discounts" />
               <AdminLink href="/admin/leaderboard" label="Leaderboard" sub="Audit point activity" last />
             </CardBody>
           </Card>
@@ -101,6 +102,36 @@ export default async function ProfilePage() {
             </div>
             <div className="text-ink-300 text-[12px]">
               Tap to view + share your Watchmen credential
+            </div>
+          </div>
+          <div className="text-ink-300 text-sm">›</div>
+        </Link>
+      </div>
+
+      {/* Partnerships + discounts — admin-curated perks brothers get
+          for showing their member card at partner businesses. */}
+      <div className="px-5 mt-6 space-y-2">
+        <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">
+          Partnerships
+        </div>
+        <Link
+          href="/app/partnerships"
+          className="block rounded-2xl bg-ink-800/80 hairline px-4 py-3 flex items-center gap-3 active:bg-ink-800"
+        >
+          <div className="h-10 w-10 rounded-xl bg-gold-500/15 ring-1 ring-gold-500/25 flex items-center justify-center text-gold-300 shrink-0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                 strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+              <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
+              <path d="M4 6v12a2 2 0 0 0 2 2h14v-4" />
+              <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-white text-[14px] font-semibold">
+              Discounts at partner businesses
+            </div>
+            <div className="text-ink-300 text-[12px]">
+              Show your card. Save on coffee, gear, more.
             </div>
           </div>
           <div className="text-ink-300 text-sm">›</div>

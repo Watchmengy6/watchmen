@@ -115,50 +115,47 @@ export default async function HomePage() {
   const posts = postsRes.data;
   if (postsRes.error) console.error("[/app/home] posts query failed", postsRes.error);
 
-  // Phase 2: likes, my-likes, comment previews, and poll votes for the
-  // posts we just got. (Comment-count fan-out removed earlier —
-  // comments.length sources from allComments.)
+  // Phase 2: stats RPC (likes, comments, my-flags, poll votes) +
+  // first-5 comment previews. Consolidated from 4 queries into 2.
   const postIds = (posts ?? []).map((p: any) => p.id);
-  const [{ data: likeRows }, { data: myLikeRows }, { data: cs }, { data: pollVoteRows }] =
-    postIds.length
-      ? await Promise.all([
-          supabase.from("post_likes").select("post_id").in("post_id", postIds),
-          supabase
-            .from("post_likes")
-            .select("post_id")
-            .eq("user_id", profile.id)
-            .in("post_id", postIds),
-          supabase
-            .from("post_comments")
-            .select(
-              "id, post_id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
-            )
-            .in("post_id", postIds)
-            .is("deleted_at", null)
-            .order("created_at", { ascending: true }),
-          supabase
-            .from("post_poll_votes")
-            .select("post_id, user_id, option_index")
-            .in("post_id", postIds),
-        ])
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const [{ data: statsRows }, { data: cs }] = postIds.length
+    ? await Promise.all([
+        supabase.rpc("home_feed_stats", {
+          p_post_ids: postIds,
+          p_viewer_id: profile.id,
+        }),
+        supabase
+          .from("post_comments")
+          .select(
+            "id, post_id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
+          )
+          .in("post_id", postIds)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true }),
+      ])
+    : [{ data: [] }, { data: [] }];
 
-  // Tally poll votes per post + remember the viewer's own vote.
-  const pollTallies = new Map<string, number[]>();
-  const myPollVotes = new Map<string, number>();
-  (pollVoteRows ?? []).forEach((v: any) => {
-    const idx = v.option_index as number;
-    const arr = pollTallies.get(v.post_id) ?? [];
-    arr[idx] = (arr[idx] ?? 0) + 1;
-    pollTallies.set(v.post_id, arr);
-    if (v.user_id === profile.id) myPollVotes.set(v.post_id, idx);
+  // Index stats by post id for O(1) lookup in the adapter.
+  const statsByPost = new Map<
+    string,
+    {
+      like_count: number;
+      comment_count: number;
+      my_liked: boolean;
+      my_poll_vote: number | null;
+      poll_vote_counts: Record<string, number> | null;
+    }
+  >();
+  (statsRows ?? []).forEach((s: any) => {
+    statsByPost.set(s.post_id, {
+      like_count: s.like_count ?? 0,
+      comment_count: s.comment_count ?? 0,
+      my_liked: !!s.my_liked,
+      my_poll_vote:
+        typeof s.my_poll_vote === "number" ? s.my_poll_vote : null,
+      poll_vote_counts: s.poll_vote_counts ?? null,
+    });
   });
-
-  const likeCount = new Map<string, number>();
-  (likeRows ?? []).forEach((r: any) => {
-    likeCount.set(r.post_id, (likeCount.get(r.post_id) ?? 0) + 1);
-  });
-  const myLikes = new Set((myLikeRows ?? []).map((r: any) => r.post_id));
 
   // Group comments by post — keep them ascending for display.
   const allComments = new Map<string, any[]>();
@@ -174,14 +171,16 @@ export default async function HomePage() {
     const tg = Array.isArray(p.tagged_group) ? p.tagged_group[0] : p.tagged_group;
     const te = Array.isArray(p.tagged_event) ? p.tagged_event[0] : p.tagged_event;
     const tm = Array.isArray(p.tagged_meetup) ? p.tagged_meetup[0] : p.tagged_meetup;
-    // Poll bookkeeping — pad the tally array to match the option count
-    // so the renderer can index safely even on a 0-vote option.
+    // Pull stats for this post (from the consolidated RPC).
+    const stats = statsByPost.get(p.id);
     const pollOpts = (p.poll_options as string[] | null) ?? null;
-    const rawTally = pollTallies.get(p.id) ?? [];
+    const voteCountsObj = stats?.poll_vote_counts ?? null;
     const pollVotes = pollOpts
-      ? pollOpts.map((_: string, idx: number) => rawTally[idx] ?? 0)
+      ? pollOpts.map(
+          (_: string, idx: number) => voteCountsObj?.[String(idx)] ?? 0,
+        )
       : null;
-    const pollMyVote = myPollVotes.has(p.id) ? myPollVotes.get(p.id)! : null;
+    const pollMyVote = stats?.my_poll_vote ?? null;
 
     return {
       id: p.id,
@@ -230,8 +229,8 @@ export default async function HomePage() {
               };
             })()
           : null,
-      likes: likeCount.get(p.id) ?? 0,
-      liked_by_me: myLikes.has(p.id),
+      likes: stats?.like_count ?? 0,
+      liked_by_me: stats?.my_liked ?? false,
       comments: (allComments.get(p.id) ?? []).map((c: any) => {
         const ca = Array.isArray(c.author) ? c.author[0] : c.author;
         return {

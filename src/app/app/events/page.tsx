@@ -4,14 +4,15 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { EventCard } from "@/components/events/EventCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { localTodayISO } from "@/lib/utils/localDate";
+import { CalendarView, type CalendarEntry } from "./CalendarView";
 
 export const dynamic = "force-dynamic";
 
-// Per Dustin's reshuffle: meetups are no longer a sub-tab of Events.
-// The dedicated /app/meetups page still exists (admin-only creation)
-// but this tab only shows Watchmen + Sponsored events now. Brothers
-// invite each other to informal stuff via feed posts instead.
-type Tab = "watchmen" | "sponsored";
+// Per Dustin's reshuffle: replace the Sponsored sub-tab with a
+// Calendar — chronological list of upcoming events + meetups +
+// birthdays. Sponsored events still exist (kind='sponsored' on
+// events) and roll into the Events tab alongside Watchmen events.
+type Tab = "events" | "calendar";
 
 export default async function EventsPage({
   searchParams,
@@ -20,49 +21,113 @@ export default async function EventsPage({
 }) {
   const { profile } = await requireApproved();
   const supabase = supabaseServer();
-  const tab: Tab = searchParams?.tab === "sponsored" ? "sponsored" : "watchmen";
+  const tab: Tab = searchParams?.tab === "calendar" ? "calendar" : "events";
 
-  // Compute "today" in the Watchmen's home time zone so the upcoming/
-  // past bucketing flips at midnight Tampa, not midnight UTC.
   const today = localTodayISO();
+  const nowIso = new Date().toISOString();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
-  const [upRes, pastRes] = await Promise.all([
-    supabase
-      .from("events")
-      .select("*")
-      .gte("event_date", today)
-      .eq("status", "published")
-      .eq("kind", tab === "sponsored" ? "sponsored" : "watchmen")
-      .order("event_date", { ascending: true })
-      .order("start_time", { ascending: true }),
-    supabase
-      .from("events")
-      .select("*")
-      .lt("event_date", today)
-      .in("status", ["published", "completed"])
-      .eq("kind", tab === "sponsored" ? "sponsored" : "watchmen")
-      .order("event_date", { ascending: false })
-      .limit(20),
-  ]);
+  // Pull what each tab needs. Events tab fetches the list. Calendar
+  // pulls upcoming events + meetups + birthday profiles, then merges.
+  const upRes = await supabase
+    .from("events")
+    .select("*")
+    .gte("event_date", today)
+    .eq("status", "published")
+    .order("event_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  const pastRes = await supabase
+    .from("events")
+    .select("*")
+    .lt("event_date", today)
+    .in("status", ["published", "completed"])
+    .order("event_date", { ascending: false })
+    .limit(20);
   const upcomingEvents: any[] = upRes.data ?? [];
   const pastEvents: any[] = pastRes.data ?? [];
 
-  // Counts for the two remaining tab pills.
-  const [{ count: watchmenCount }, { count: sponsoredCount }] = await Promise.all([
-    supabase
-      .from("events")
-      .select("*", { count: "exact", head: true })
-      .gte("event_date", today)
-      .eq("status", "published")
-      .eq("kind", "watchmen"),
-    supabase
-      .from("events")
-      .select("*", { count: "exact", head: true })
-      .gte("event_date", today)
-      .eq("status", "published")
-      .eq("kind", "sponsored"),
-  ]);
+  let calendarEntries: CalendarEntry[] = [];
+  if (tab === "calendar") {
+    const [{ data: meetups }, { data: bdayPool }] = await Promise.all([
+      supabase
+        .from("meetups")
+        .select(
+          "id, title, when_at, location_name, host:profiles!meetups_host_user_id_fkey(full_name)",
+        )
+        .gte("when_at", nowIso)
+        .order("when_at", { ascending: true }),
+      supabase
+        .from("profiles")
+        .select("id, full_name, birthday")
+        .eq("status", "approved")
+        .not("birthday", "is", null),
+    ]);
+
+    const eventEntries: CalendarEntry[] = upcomingEvents.map((e: any) => ({
+      kind: "event" as const,
+      id: e.id,
+      sortAt: `${e.event_date}T${e.start_time ?? "00:00:00"}`,
+      title: e.title,
+      subtitle: [
+        e.start_time ? formatTime(e.start_time) : null,
+        e.location_name,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      href: `/app/events/${e.id}`,
+    }));
+
+    const meetupEntries: CalendarEntry[] = (meetups ?? []).map((m: any) => {
+      const host = Array.isArray(m.host) ? m.host[0] : m.host;
+      return {
+        kind: "meetup" as const,
+        id: m.id,
+        sortAt: m.when_at,
+        title: m.title,
+        subtitle: [host?.full_name ? `Hosted by ${host.full_name}` : null, m.location_name]
+          .filter(Boolean)
+          .join(" · "),
+        href: `/app/meetups/${m.id}`,
+      };
+    });
+
+    // Birthdays — compute the next occurrence (this year if still
+    // upcoming, else next year) so they sort correctly into the list.
+    const todayLocal = new Date();
+    todayLocal.setHours(0, 0, 0, 0);
+    const thisYear = todayLocal.getFullYear();
+    const birthdayEntries: CalendarEntry[] = (bdayPool ?? [])
+      .map((p: any): CalendarEntry | null => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(p.birthday ?? "");
+        if (!m) return null;
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        let next = new Date(thisYear, month - 1, day);
+        if (next < todayLocal) next = new Date(thisYear + 1, month - 1, day);
+        return {
+          kind: "birthday" as const,
+          id: p.id,
+          sortAt: next.toISOString(),
+          title: `${p.full_name}'s birthday`,
+          subtitle: next.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          }),
+          href: `/app/members/${p.id}`,
+        };
+      })
+      .filter((x): x is CalendarEntry => x !== null);
+
+    calendarEntries = [...eventEntries, ...meetupEntries, ...birthdayEntries]
+      .sort((a, b) => a.sortAt.localeCompare(b.sortAt))
+      // Window: show only the next 90 days so the list stays useful.
+      .filter((e) => {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + 90);
+        return new Date(e.sortAt) <= cutoff;
+      });
+  }
 
   // RSVP counts + my-RSVP for events being shown.
   const eventIds = [...upcomingEvents, ...pastEvents].map((e) => e.id);
@@ -88,6 +153,27 @@ export default async function EventsPage({
       mineMap[r.event_id] = r.status;
     });
   }
+
+  // Counts for the tab pills.
+  const [{ count: eventsCount }, { count: meetupCount }, { count: bdayCount }] =
+    await Promise.all([
+      supabase
+        .from("events")
+        .select("*", { count: "exact", head: true })
+        .gte("event_date", today)
+        .eq("status", "published"),
+      supabase
+        .from("meetups")
+        .select("*", { count: "exact", head: true })
+        .gte("when_at", nowIso),
+      supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved")
+        .not("birthday", "is", null),
+    ]);
+  const calendarCount =
+    (eventsCount ?? 0) + (meetupCount ?? 0) + (bdayCount ?? 0);
 
   return (
     <div
@@ -117,53 +203,58 @@ export default async function EventsPage({
         ) : null}
       </div>
 
-      {/* Segmented tabs — Watchmen + Sponsored only. Meetups now live
-          on the feed (member-created) or on the dedicated /app/meetups
-          page (admin-curated). */}
       <div className="flex gap-1.5">
-        <TabPill href="/app/events?tab=watchmen" label="Watchmen" count={watchmenCount ?? 0} active={tab === "watchmen"} />
-        <TabPill href="/app/events?tab=sponsored" label="Sponsored" count={sponsoredCount ?? 0} active={tab === "sponsored"} />
+        <TabPill href="/app/events?tab=events" label="Events" count={eventsCount ?? 0} active={tab === "events"} />
+        <TabPill href="/app/events?tab=calendar" label="Calendar" count={calendarCount} active={tab === "calendar"} />
       </div>
 
-      {tab === "sponsored" ? (
-        <div className="rounded-2xl bg-ink-800/60 hairline px-4 py-3 text-[13px] text-ink-300">
-          <span className="text-white font-semibold">Sponsored events</span> are paid placements from partner businesses around Tampa Bay. RSVPs still earn you check-in points.
-        </div>
-      ) : null}
-
-      <section className="space-y-3">
-        {upcomingEvents.length === 0 ? (
-          <EmptyState
-            title={tab === "sponsored" ? "No sponsored events yet" : "No upcoming events"}
-            body={tab === "sponsored" ? "Partner placements will appear here." : "An admin will post the next one soon."}
-          />
-        ) : (
-          upcomingEvents.map((e) => (
-            <EventCard
-              key={e.id}
-              {...(e as any)}
-              rsvp_count={rsvpCount[e.id] ?? 0}
-              user_going={mineMap[e.id] === "going"}
+      {tab === "calendar" ? (
+        <CalendarView entries={calendarEntries} />
+      ) : (
+        <section className="space-y-3">
+          {upcomingEvents.length === 0 ? (
+            <EmptyState
+              title="No upcoming events"
+              body="An admin will post the next one soon."
             />
-          ))
-        )}
-
-        {pastEvents.length > 0 ? (
-          <div className="pt-4 space-y-3">
-            <div className="text-[11px] tracking-[0.25em] uppercase text-ink-300">Past</div>
-            {pastEvents.map((e) => (
+          ) : (
+            upcomingEvents.map((e) => (
               <EventCard
                 key={e.id}
                 {...(e as any)}
                 rsvp_count={rsvpCount[e.id] ?? 0}
                 user_going={mineMap[e.id] === "going"}
               />
-            ))}
-          </div>
-        ) : null}
-      </section>
+            ))
+          )}
+
+          {pastEvents.length > 0 ? (
+            <div className="pt-4 space-y-3">
+              <div className="text-[11px] tracking-[0.25em] uppercase text-ink-300">Past</div>
+              {pastEvents.map((e) => (
+                <EventCard
+                  key={e.id}
+                  {...(e as any)}
+                  rsvp_count={rsvpCount[e.id] ?? 0}
+                  user_going={mineMap[e.id] === "going"}
+                />
+              ))}
+            </div>
+          ) : null}
+        </section>
+      )}
     </div>
   );
+}
+
+function formatTime(t: string): string {
+  // "18:30:00" -> "6:30 PM"
+  const [hh, mm] = t.split(":");
+  const h = Number(hh);
+  if (Number.isNaN(h)) return t;
+  const period = h >= 12 ? "PM" : "AM";
+  const display = h % 12 || 12;
+  return `${display}:${mm} ${period}`;
 }
 
 function TabPill({
