@@ -46,19 +46,144 @@ export function MemberCard({
       .join("\n");
   }
 
+  /**
+   * Rasterize the card to a PNG by drawing onto a canvas at 2x retina
+   * scale. This is what gets attached to the iMessage / email share so
+   * the recipient sees the actual gold card, not just plain text.
+   */
+  async function renderCardToPng(): Promise<Blob | null> {
+    if (typeof document === "undefined") return null;
+    // 800x504 (≈ 1.586:1 credit-card ratio) at 2x = 1600x1008 pixels.
+    const W = 1600;
+    const H = 1008;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    // ---------- background gradient ----------
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#f0d57a");
+    bg.addColorStop(0.55, "#c79b3b");
+    bg.addColorStop(1, "#8a6210");
+    ctx.fillStyle = bg;
+    roundRect(ctx, 0, 0, W, H, 56);
+    ctx.fill();
+
+    // ---------- top-left highlight (the "embossed" feel) ----------
+    const highlight = ctx.createLinearGradient(0, 0, W * 0.6, H * 0.6);
+    highlight.addColorStop(0, "rgba(255,255,255,0.32)");
+    highlight.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = highlight;
+    ctx.fillRect(0, 0, W, H);
+
+    // ---------- subtle inner border ----------
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 3;
+    roundRect(ctx, 6, 6, W - 12, H - 12, 50);
+    ctx.stroke();
+
+    // ---------- top row: logo placeholder + label ----------
+    // We draw a stylized "W" since loading the SVG into canvas reliably
+    // across browsers (especially Safari) is fiddly. Keep the brand
+    // mark deterministic.
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.font = "900 86px 'Helvetica Neue', system-ui, -apple-system, sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillText("W", 56, 48);
+
+    // top-right "THE WATCHMEN / MEMBER" label
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.font = "600 22px 'Helvetica Neue', system-ui, sans-serif";
+    ctx.fillText("THE WATCHMEN", W - 56, 56);
+    ctx.fillStyle = "rgba(0,0,0,0.92)";
+    ctx.font = "700 28px 'Helvetica Neue', system-ui, sans-serif";
+    ctx.fillText("MEMBER", W - 56, 90);
+    ctx.textAlign = "left";
+
+    // ---------- center: member number ----------
+    if (numberDisplay) {
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.font = "600 22px 'Helvetica Neue', system-ui, sans-serif";
+      ctx.fillText("MEMBER NO.", 56, H * 0.42);
+      ctx.fillStyle = "rgba(0,0,0,0.95)";
+      ctx.font = "900 96px 'Helvetica Neue', system-ui, sans-serif";
+      ctx.fillText(numberDisplay, 56, H * 0.42 + 40);
+    }
+
+    // ---------- bottom: name + contact ----------
+    const bottomY = H - 64;
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.font = "600 20px 'Helvetica Neue', system-ui, sans-serif";
+    ctx.fillText("NAME", 56, bottomY - 120);
+
+    ctx.fillStyle = "rgba(0,0,0,0.95)";
+    ctx.font = "800 44px 'Helvetica Neue', system-ui, sans-serif";
+    ctx.fillText(truncate(fullName, 28), 56, bottomY - 90);
+
+    ctx.fillStyle = "rgba(0,0,0,0.9)";
+    ctx.font = "600 26px 'Helvetica Neue', system-ui, sans-serif";
+    ctx.fillText(truncate(email, 42), 56, bottomY - 30);
+    if (phone) {
+      ctx.fillStyle = "rgba(0,0,0,0.82)";
+      ctx.fillText(truncate(phone, 42), 56, bottomY + 4);
+    }
+
+    return new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/png", 0.95),
+    );
+  }
+
   async function share() {
     const text = buildShareText();
-    if (typeof navigator !== "undefined" && (navigator as any).share) {
+
+    // Try to share with the rasterized card image first. Web Share Level 2
+    // (iOS 16.4+, Android Chrome) supports `files`; older browsers fall
+    // back to text-only share or clipboard.
+    try {
+      const blob = await renderCardToPng();
+      const nav = navigator as any;
+      if (blob && nav?.share && nav?.canShare) {
+        const file = new File(
+          [blob],
+          `${fullName.replace(/\s+/g, "-").toLowerCase()}-watchmen-card.png`,
+          { type: "image/png" },
+        );
+        if (nav.canShare({ files: [file] })) {
+          try {
+            await nav.share({
+              title: `${fullName} · The Watchmen`,
+              text,
+              files: [file],
+            });
+            return;
+          } catch {
+            // user cancelled — drop through
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[member-card] image share failed, falling back", e);
+    }
+
+    // Fallback 1: text-only share (older Safari / Android browsers).
+    const nav2 = navigator as any;
+    if (nav2?.share) {
       try {
-        await (navigator as any).share({
+        await nav2.share({
           title: `${fullName} · The Watchmen`,
           text,
         });
         return;
       } catch {
-        // user cancelled — fall through to clipboard
+        // dropped through
       }
     }
+
+    // Fallback 2: clipboard copy.
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -71,6 +196,29 @@ export function MemberCard({
         variant: "error",
       });
     }
+  }
+
+  /** Draw a rounded rectangle path for canvas fill/stroke. */
+  function roundRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number,
+  ) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function truncate(s: string, max: number): string {
+    if (s.length <= max) return s;
+    return s.slice(0, max - 1) + "…";
   }
 
   return (
