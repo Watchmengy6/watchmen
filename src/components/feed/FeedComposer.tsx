@@ -505,7 +505,13 @@ export function FeedComposer({
             </button>
             <button
               onClick={handlePost}
-              disabled={!text.trim() || pending}
+              disabled={
+                pending ||
+                (type === "poll"
+                  ? !pollQuestion.trim() ||
+                    pollOptions.filter((o) => o.trim()).length < 2
+                  : !text.trim())
+              }
               className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black disabled:opacity-40"
             >
               {pending ? "Posting…" : "Post"}
