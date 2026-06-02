@@ -6,7 +6,7 @@
 # next
 /.next/
 /out/
-next-env.d.ts
+# next-env.d.ts is committed so fresh clones can typecheck without running build first.
 
 # production
 /build

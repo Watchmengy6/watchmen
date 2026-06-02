@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { sendThreadMessageAction } from "@/lib/dms/actions";
+import { loadOlderThreadMessagesAction } from "@/lib/dms/pagination";
 import { createBrowserClient } from "@supabase/ssr";
 import { uploadMedia } from "@/lib/uploads/client";
 
@@ -38,6 +39,13 @@ export function ThreadChatClient({
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // hasMore is true if the initial page hit the 200-msg cap (older
+  // history likely exists). We assume `initialMessages.length >= 200`
+  // → could have more; smaller → we already have everything.
+  const [hasMoreOlder, setHasMoreOlder] = useState(
+    initialMessages.length >= 200,
+  );
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   // FIFO queue of local-* ids that are waiting for their realtime echo.
@@ -261,9 +269,68 @@ export function ThreadChatClient({
     });
   }
 
+  async function loadOlder() {
+    if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    const oldestCreatedAt = messages[0].created_at;
+    // Remember the scroll height so we can preserve the user's view
+    // position after prepending older messages.
+    const el = scrollRef.current;
+    const prevScrollHeight = el?.scrollHeight ?? 0;
+    const r = await loadOlderThreadMessagesAction({
+      threadId,
+      beforeCreatedAt: oldestCreatedAt,
+    });
+    // Seed the author cache with anyone we haven't seen before.
+    r.messages.forEach((m) => {
+      if (!authorCacheRef.current.has(m.author_id)) {
+        authorCacheRef.current.set(m.author_id, {
+          full_name: m.author_name,
+          profile_photo_url: m.author_photo,
+        });
+      }
+    });
+    setMessages((prev) => [
+      ...r.messages.map((m) => ({
+        id: m.id,
+        body: m.body,
+        media_url: m.media_url,
+        media_type: m.media_type,
+        created_at: m.created_at,
+        author_id: m.author_id,
+        author_name: m.author_name,
+        author_photo: m.author_photo,
+        is_me: m.author_id === meId,
+      })),
+      ...prev,
+    ]);
+    setHasMoreOlder(r.hasMore);
+    setLoadingOlder(false);
+    // Restore scroll position so the user stays anchored on what they
+    // were reading instead of being yanked to the new top.
+    requestAnimationFrame(() => {
+      const newEl = scrollRef.current;
+      if (newEl) {
+        newEl.scrollTop = newEl.scrollHeight - prevScrollHeight;
+      }
+    });
+  }
+
   return (
     <>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
+        {hasMoreOlder ? (
+          <div className="flex justify-center pb-3">
+            <button
+              type="button"
+              onClick={loadOlder}
+              disabled={loadingOlder}
+              className="h-8 px-4 rounded-full bg-ink-800 hairline text-ink-200 text-[12px] font-medium disabled:opacity-50"
+            >
+              {loadingOlder ? "Loading…" : "Load older messages"}
+            </button>
+          </div>
+        ) : null}
         {messages.length === 0 ? (
           <div className="text-center text-ink-300 text-sm py-10">
             No messages yet. Say hello.

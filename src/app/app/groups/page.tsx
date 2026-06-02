@@ -21,16 +21,17 @@ export default async function GroupsPage({
   const myGroupIds = new Set((myMemberships ?? []).map((r: any) => r.group_id));
   const list = (allGroups ?? []).filter((g: any) => (tab === "joined" ? myGroupIds.has(g.id) : true));
 
-  // Member counts (one query for all groups).
+  // Member counts via grouped RPC — was fetching every row and
+  // counting in JS, which scaled with total memberships. The function
+  // does a single group-by on the database.
   const counts = new Map<string, number>();
   const ids = (allGroups ?? []).map((g: any) => g.id);
   if (ids.length > 0) {
-    const { data: memberRows } = await supabase
-      .from("group_members")
-      .select("group_id")
-      .in("group_id", ids);
-    (memberRows ?? []).forEach((r: any) => {
-      counts.set(r.group_id, (counts.get(r.group_id) ?? 0) + 1);
+    const { data: countRows } = await supabase.rpc("group_member_counts", {
+      p_group_ids: ids,
+    });
+    (countRows ?? []).forEach((r: any) => {
+      counts.set(r.group_id, Number(r.member_count));
     });
   }
 

@@ -12,16 +12,17 @@ export default async function MembersPage({
   await requireApproved();
   const supabase = supabaseServer();
 
+  // Page size 30 — matches loadMoreMembersAction so the client-side
+  // "Load more" path stays in sync. Request one extra to detect hasMore.
+  const PAGE_SIZE = 30;
   let query = supabase
     .from("profiles")
     .select("id, full_name, profile_photo_url, occupation, company, points_total, interests")
     .eq("status", "approved")
-    .order("points_total", { ascending: false });
+    .order("points_total", { ascending: false })
+    .range(0, PAGE_SIZE); // 0..PAGE_SIZE = 31 rows
 
   if (searchParams.q) {
-    // PostgREST's .or() takes a comma-separated filter string, and commas /
-    // parens inside the user's query would corrupt that grammar. Strip the
-    // dangerous chars and also escape % / _ so users can't inject wildcards.
     const safe = searchParams.q
       .replace(/[,()]/g, " ")
       .replace(/[%_]/g, (c) => `\\${c}`)
@@ -36,7 +37,10 @@ export default async function MembersPage({
     query = query.contains("interests", [searchParams.interest]);
   }
 
-  const { data: members } = await query.limit(100);
+  const { data } = await query;
+  const rawMembers = data ?? [];
+  const hasMore = rawMembers.length > PAGE_SIZE;
+  const members = hasMore ? rawMembers.slice(0, PAGE_SIZE) : rawMembers;
 
   return (
     <div className="pt-8">
@@ -47,7 +51,8 @@ export default async function MembersPage({
       <MemberSearch
         initialQ={searchParams.q ?? ""}
         initialInterest={searchParams.interest ?? ""}
-        members={members ?? []}
+        members={members}
+        initialHasMore={hasMore}
       />
     </div>
   );

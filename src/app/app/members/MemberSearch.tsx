@@ -1,25 +1,56 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Input } from "@/components/ui/Input";
 import { MemberCard } from "@/components/members/MemberCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { INTERESTS } from "@/lib/profile/interests";
+import { loadMoreMembersAction } from "@/lib/members/actions";
 
 export function MemberSearch({
   initialQ,
   initialInterest,
   members,
+  initialHasMore = false,
 }: {
   initialQ: string;
   initialInterest: string;
   members: any[];
+  initialHasMore?: boolean;
 }) {
   const router = useRouter();
   const [q, setQ] = useState(initialQ);
   const [interest, setInterest] = useState(initialInterest);
   const [, startTransition] = useTransition();
+  // Pagination: server renders page 0, client appends from there.
+  const [list, setList] = useState<any[]>(members);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Reset pagination state any time the server-rendered first page
+  // changes (e.g. filter applied via URL).
+  useEffect(() => {
+    setList(members);
+    setPage(0);
+    setHasMore(initialHasMore);
+  }, [members, initialHasMore]);
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const r = await loadMoreMembersAction({
+      page: nextPage,
+      q: initialQ || undefined,
+      interest: initialInterest || undefined,
+    });
+    setList((prev) => [...prev, ...r.members]);
+    setPage(nextPage);
+    setHasMore(r.hasMore);
+    setLoadingMore(false);
+  }
 
   function update(next: { q?: string; interest?: string }) {
     const params = new URLSearchParams();
@@ -76,11 +107,21 @@ export function MemberSearch({
       </div>
 
       <div className="mt-4 space-y-3">
-        {members.length === 0 ? (
+        {list.length === 0 ? (
           <EmptyState title="No members match" body="Try clearing filters." />
         ) : (
-          members.map((m) => <MemberCard key={m.id} {...m} />)
+          list.map((m) => <MemberCard key={m.id} {...m} />)
         )}
+        {hasMore ? (
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="w-full h-11 rounded-full bg-ink-800 hairline text-ink-100 text-[13.5px] font-semibold disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        ) : null}
       </div>
     </div>
   );

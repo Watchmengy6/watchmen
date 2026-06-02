@@ -65,13 +65,18 @@ export async function toggleReactionAction(input: {
     .maybeSingle();
 
   if (existing) {
-    await supabase.from("message_reactions").delete().eq("id", existing.id);
+    const { error } = await supabase
+      .from("message_reactions")
+      .delete()
+      .eq("id", existing.id);
+    if (error) return { error: error.message };
   } else {
-    await supabase.from("message_reactions").insert({
+    const { error } = await supabase.from("message_reactions").insert({
       message_id: input.message_id,
       user_id: profile.id,
       reaction_type: reaction,
     });
+    if (error) return { error: error.message };
   }
   return { success: true };
 }
