@@ -13,6 +13,7 @@ export default async function AdminHome() {
     { count: events },
     { data: topInviters },
     { data: birthdayPool },
+    { data: admins },
   ] = await Promise.all([
     supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "approved"),
@@ -23,15 +24,39 @@ export default async function AdminHome() {
       .eq("status", "approved")
       .order("points_total", { ascending: false })
       .limit(5),
-    // Pull every approved member with a birthday set. Postgres can't
-    // sort by "days until next birthday" without a clunky expression
-    // index, and the member count is small — easier to compute in JS.
     supabase
       .from("profiles")
       .select("id, full_name, profile_photo_url, birthday")
       .eq("status", "approved")
       .not("birthday", "is", null),
+    // Admin push-subscription check: surface whether each admin has at
+    // least one push subscription on file so we know who'll actually
+    // receive signup pushes (Dustin missed one because his device
+    // didn't have push enabled).
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("role", ["admin", "super_admin"])
+      .eq("status", "approved"),
   ]);
+  const { data: adminSubs } = admins && admins.length > 0
+    ? await supabase
+        .from("push_subscriptions")
+        .select("user_id")
+        .in(
+          "user_id",
+          admins.map((a: any) => a.id),
+        )
+    : { data: [] };
+  const subscribedAdminIds = new Set(
+    (adminSubs ?? []).map((s: any) => s.user_id),
+  );
+  const adminPushStatus = (admins ?? []).map((a: any) => ({
+    id: a.id,
+    full_name: a.full_name,
+    subscribed: subscribedAdminIds.has(a.id),
+  }));
+  const someAdminMissingPush = adminPushStatus.some((a) => !a.subscribed);
 
   // Compute next-birthday occurrence + days-until for each member, keep
   // anyone whose next birthday is within 30 days, sort soonest first.
@@ -44,6 +69,40 @@ export default async function AdminHome() {
         <Tile href="/admin/members" value={members ?? 0} label="Members" />
         <Tile href="/admin/events" value={events ?? 0} label="Events" />
       </div>
+
+      {/* Admin push status — flags any admin who hasn't enabled push on
+          a device so we know if signup/report notifications will reach
+          them. Dustin missed a signup push because his device wasn't
+          subscribed yet. */}
+      {someAdminMissingPush ? (
+        <Card>
+          <CardBody>
+            <div className="text-[11px] tracking-[0.25em] uppercase text-red-300 mb-2">
+              Push not enabled
+            </div>
+            <div className="text-ink-200 text-[13.5px] mb-2">
+              These admins won&apos;t get signup or report pushes until they
+              tap <span className="text-white font-semibold">Enable notifications</span> on their profile:
+            </div>
+            <div className="space-y-1">
+              {adminPushStatus
+                .filter((a) => !a.subscribed)
+                .map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between text-[13px] py-1"
+                  >
+                    <span className="text-white">{a.full_name}</span>
+                    <span className="text-red-300/80 text-[11.5px]">not subscribed</span>
+                  </div>
+                ))}
+            </div>
+            <div className="text-ink-400 text-[11.5px] mt-2">
+              On iPhone, the app has to be installed to Home Screen first.
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
 
       {/* Upcoming birthdays — next 30 days. The home feed already fires
           an automated post on the day; this card gives admins a heads

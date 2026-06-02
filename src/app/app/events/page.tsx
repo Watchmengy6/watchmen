@@ -3,6 +3,7 @@ import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { EventCard } from "@/components/events/EventCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { localTodayISO } from "@/lib/utils/localDate";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +22,9 @@ export default async function EventsPage({
   const supabase = supabaseServer();
   const tab: Tab = searchParams?.tab === "sponsored" ? "sponsored" : "watchmen";
 
-  // Use the server's LOCAL date (Vercel/Supabase runs UTC but we display
-  // for the user's local day — close enough for upcoming/past bucketing).
-  const now = new Date();
-  const localOffsetMin = now.getTimezoneOffset();
-  const localToday = new Date(now.getTime() - localOffsetMin * 60 * 1000);
-  const today = localToday.toISOString().slice(0, 10);
+  // Compute "today" in the Watchmen's home time zone so the upcoming/
+  // past bucketing flips at midnight Tampa, not midnight UTC.
+  const today = localTodayISO();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   const [upRes, pastRes] = await Promise.all([

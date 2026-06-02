@@ -176,12 +176,19 @@ export async function rsvpMeetupAction(formData: FormData) {
     .maybeSingle();
   const isNewYes = going && (!existing || !existing.going);
 
-  await supabase
+  // Only award points after the RSVP write actually persists. The old
+  // code ignored the upsert result and could hand out points even when
+  // the row never landed (RLS failure, network blip, etc).
+  const { error: rsvpErr } = await supabase
     .from("meetup_rsvps")
     .upsert(
       { meetup_id: meetupId, user_id: me.id, going },
       { onConflict: "meetup_id,user_id" },
     );
+  if (rsvpErr) {
+    console.error("[rsvpMeetupAction] upsert failed", rsvpErr);
+    return;
+  }
 
   if (isNewYes) {
     await awardPoints({ userId: me.id, action: "meetup_rsvp", meta: { meetup_id: meetupId } });

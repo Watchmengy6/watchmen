@@ -7,6 +7,7 @@ import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { Logo } from "@/components/brand/Logo";
 import { AdminPill } from "@/components/admin/AdminPill";
 import { fmtTime } from "@/lib/utils/date";
+import { localTodayISO } from "@/lib/utils/localDate";
 import { createPostAction } from "@/lib/feed/actions";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
 
@@ -17,7 +18,9 @@ export default async function HomePage() {
   const supabase = supabaseServer();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Compute "today" in the Watchmen's home time zone instead of UTC so
+  // the next-event banner doesn't flip a day early after 8 PM Tampa.
+  const today = localTodayISO();
 
   // Birthdays today — used for the celebratory banner. We also book an
   // auto feed post via the SECURITY DEFINER RPC (idempotent: unique on

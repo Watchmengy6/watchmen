@@ -7,9 +7,13 @@ import { cn } from "@/lib/utils/cn";
 import { uploadMedia } from "@/lib/uploads/client";
 import { searchMembersForMention } from "@/lib/feed/actions";
 
+// Meetup composer type removed per Dustin — informal coordination
+// happens via plain posts now, not a dedicated meetup type. The
+// schema columns (meetup_when_at / meetup_location) and the
+// MemberMeetupCard renderer stay in place so we can flip it back on
+// without a migration if Dustin reverses again.
 const types = [
   { id: "post", label: "Post" },
-  { id: "meetup", label: "Meetup" },
   { id: "poll", label: "Poll" },
   { id: "job", label: "Hiring" },
   { id: "need", label: "Need" },
@@ -158,12 +162,6 @@ export function FeedComposer({
     const requiresBody = type !== "poll";
     if (requiresBody && !text.trim()) return;
     if (pending) return;
-    // Meetup posts require both fields — otherwise it's just a regular
-    // post with the wrong label and no card to render.
-    if (type === "meetup" && (!meetupWhen.trim() || !meetupWhere.trim())) {
-      setErr("Meetup needs both when and where.");
-      return;
-    }
     // Polls need a question + at least two non-empty options.
     let cleanedPollOptions: string[] = [];
     if (type === "poll") {
@@ -192,16 +190,6 @@ export function FeedComposer({
     fd.set("tagged_group_id", taggedGroupId ?? "");
     fd.set("media_url", mediaUrl ?? "");
     fd.set("media_type", mediaType ?? "none");
-    if (type === "meetup") {
-      // datetime-local has no timezone — pass the local string and the
-      // server combines it with the browser tz offset for storage.
-      fd.set("meetup_when_at", meetupWhen);
-      fd.set("meetup_location", meetupWhere.trim());
-      fd.set(
-        "tz_offset",
-        formatTzOffset(new Date().getTimezoneOffset()),
-      );
-    }
     if (type === "poll") {
       fd.set("poll_question", pollQuestion.trim());
       // FormData supports multiple values for the same key; the server
@@ -222,15 +210,20 @@ export function FeedComposer({
   return (
     <div className="rounded-2xl bg-ink-800/80 hairline p-3">
       <div className="flex items-center gap-3">
-        <Avatar name={meName} src={meAvatarUrl ?? undefined} size={36} />
-        {/* Gold gradient pill so the composer pops instead of blending
-            in. Per Dustin — more obvious composer = more posts. */}
+        <Avatar name={meName} src={meAvatarUrl ?? undefined} size={40} />
+        {/* Big, bright "Share something" button — Dustin asked for it to
+            pop more so members actually post. Solid gold gradient, dark
+            text, taller, with a glow ring on hover/focus. */}
         <button
           onClick={() => setOpen(true)}
-          className="flex-1 h-11 rounded-full bg-gradient-to-r from-gold-400/20 via-gold-500/15 to-gold-700/0 ring-1 ring-gold-500/40 px-4 text-left text-gold-100 text-[14px] font-medium flex items-center gap-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+          className="group/share flex-1 h-13 min-h-[52px] rounded-full bg-gradient-to-b from-gold-300 to-gold-500 px-5 text-left text-black text-[15.5px] font-semibold flex items-center gap-2 shadow-[0_0_22px_-6px_rgba(212,175,55,0.55),inset_0_1px_0_rgba(255,255,255,0.45)] ring-1 ring-gold-300/60 active:scale-[0.99] transition-transform"
+          aria-label="Share something with the room"
         >
-          <span className="text-gold-300 text-base leading-none">＋</span>
-          Share something with the room…
+          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-black/15 text-black text-lg leading-none">
+            ＋
+          </span>
+          <span className="flex-1">Share something…</span>
+          <span className="text-black/70 text-[18px] leading-none">›</span>
         </button>
       </div>
 
@@ -318,36 +311,6 @@ export function FeedComposer({
             </div>
           ) : null}
 
-          {/* Meetup-only fields: when + where. Render above the textarea
-              so it reads as "I'm doing X at Y, here's what it is." */}
-          {type === "meetup" ? (
-            <div className="mb-2 grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1">
-                  When
-                </div>
-                <input
-                  type="datetime-local"
-                  value={meetupWhen}
-                  onChange={(e) => setMeetupWhen(e.target.value)}
-                  className="w-full h-10 rounded-xl bg-ink-900/60 hairline px-3 text-[13.5px] text-white outline-none focus:ring-2 focus:ring-gold-400/30"
-                />
-              </div>
-              <div>
-                <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1">
-                  Where
-                </div>
-                <input
-                  type="text"
-                  value={meetupWhere}
-                  onChange={(e) => setMeetupWhere(e.target.value)}
-                  placeholder="Black Crow Coffee"
-                  className="w-full h-10 rounded-xl bg-ink-900/60 hairline px-3 text-[13.5px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
-                />
-              </div>
-            </div>
-          ) : null}
-
           {/* Body textarea — hidden for polls because the question
               already IS the body. */}
           {type !== "poll" ? (
@@ -357,13 +320,11 @@ export function FeedComposer({
               onChange={(e) => setText(e.target.value)}
               rows={3}
               placeholder={
-                type === "meetup"
-                  ? "Who's around? Quick details — what is it, who should come?"
-                  : type === "job"
-                    ? "Describe the role, location, and how to reach you. Tag with @"
-                    : type === "need"
-                      ? "What do you need? Tag a brother with @"
-                      : "What's on your mind? Tag with @"
+                type === "job"
+                  ? "Describe the role, location, and how to reach you. Tag with @"
+                  : type === "need"
+                    ? "What do you need? Tag a brother with @"
+                    : "What's on your mind? Tag with @"
               }
               className="w-full rounded-xl bg-ink-900/60 hairline px-3 py-2.5 text-[15px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 resize-none"
             />

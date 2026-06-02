@@ -90,16 +90,54 @@ export async function sendPushToUser(opts: {
   return { sent, failed };
 }
 
-/** Send the same payload to every approved admin. */
+/**
+ * Send the same payload to every approved admin. Logs each step so we
+ * can debug from Vercel why a signup push didn't land (most common
+ * cause: the admin never enabled push on the device they expect it on).
+ */
 export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
   const supabase = svc();
-  const { data: admins } = await supabase
+  const { data: admins, error: adminErr } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, full_name")
     .in("role", ["admin", "super_admin"])
     .eq("status", "approved");
-  if (!admins) return;
-  await Promise.all(
-    admins.map((a) => sendPushToUser({ userId: a.id, payload })),
+  if (adminErr) {
+    console.warn("[push.admins] failed to load admins", adminErr);
+    return;
+  }
+  if (!admins || admins.length === 0) {
+    console.warn("[push.admins] no approved admins found");
+    return;
+  }
+
+  // Count subscriptions up front so we can log "0 admins reachable"
+  // distinctly from "no admins at all".
+  const { count: subCount } = await supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .in(
+      "user_id",
+      admins.map((a) => a.id),
+    );
+  console.log(
+    `[push.admins] notifying ${admins.length} admin(s) — ${subCount ?? 0} subscriptions on file`,
+  );
+
+  const results = await Promise.all(
+    admins.map(async (a) => {
+      const r = await sendPushToUser({ userId: a.id, payload });
+      if (r.sent === 0) {
+        console.warn(
+          `[push.admins] no subscription for admin ${a.full_name} (${a.id}) — they haven't enabled push on any device`,
+        );
+      }
+      return r;
+    }),
+  );
+  const totalSent = results.reduce((s, r) => s + r.sent, 0);
+  const totalFailed = results.reduce((s, r) => s + r.failed, 0);
+  console.log(
+    `[push.admins] done: ${totalSent} delivered, ${totalFailed} failed`,
   );
 }
