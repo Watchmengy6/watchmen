@@ -4,7 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { EventCard } from "@/components/events/EventCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { localTodayISO } from "@/lib/utils/localDate";
-import { CalendarView, type CalendarEntry } from "./CalendarView";
+import { CalendarView, type CalendarEntry, type BirthdayMember } from "./CalendarView";
 
 export const dynamic = "force-dynamic";
 
@@ -46,34 +46,50 @@ export default async function EventsPage({
   const upcomingEvents: any[] = upRes.data ?? [];
   const pastEvents: any[] = pastRes.data ?? [];
 
+  // Calendar data — events + meetups go into entries (datestamped),
+  // birthdays go separately because they repeat annually and the
+  // calendar grid projects them onto every displayed month.
   let calendarEntries: CalendarEntry[] = [];
+  let calendarBirthdays: BirthdayMember[] = [];
   if (tab === "calendar") {
-    const [{ data: meetups }, { data: bdayPool }] = await Promise.all([
-      supabase
-        .from("meetups")
-        .select(
-          "id, title, when_at, location_name, host:profiles!meetups_host_user_id_fkey(full_name)",
-        )
-        .gte("when_at", nowIso)
-        .order("when_at", { ascending: true }),
-      supabase
-        .from("profiles")
-        .select("id, full_name, birthday")
-        .eq("status", "approved")
-        .not("birthday", "is", null),
-    ]);
+    // Pull a wider window for the calendar so users can navigate
+    // forward a few months. Past month visible too so members can
+    // glance back at last week.
+    const calendarStart = new Date();
+    calendarStart.setMonth(calendarStart.getMonth() - 1);
+    const calendarEnd = new Date();
+    calendarEnd.setMonth(calendarEnd.getMonth() + 6);
 
-    const eventEntries: CalendarEntry[] = upcomingEvents.map((e: any) => ({
+    const [{ data: allEvents }, { data: meetups }, { data: bdayPool }] =
+      await Promise.all([
+        supabase
+          .from("events")
+          .select("id, title, event_date, start_time, location_name")
+          .eq("status", "published")
+          .gte("event_date", calendarStart.toISOString().slice(0, 10))
+          .lte("event_date", calendarEnd.toISOString().slice(0, 10))
+          .order("event_date", { ascending: true }),
+        supabase
+          .from("meetups")
+          .select(
+            "id, title, when_at, location_name, host:profiles!meetups_host_user_id_fkey(full_name)",
+          )
+          .gte("when_at", calendarStart.toISOString())
+          .lte("when_at", calendarEnd.toISOString())
+          .order("when_at", { ascending: true }),
+        supabase
+          .from("profiles")
+          .select("id, full_name, birthday")
+          .eq("status", "approved")
+          .not("birthday", "is", null),
+      ]);
+
+    const eventEntries: CalendarEntry[] = (allEvents ?? []).map((e: any) => ({
       kind: "event" as const,
       id: e.id,
-      sortAt: `${e.event_date}T${e.start_time ?? "00:00:00"}`,
+      at: `${e.event_date}T${e.start_time ?? "00:00:00"}`,
       title: e.title,
-      subtitle: [
-        e.start_time ? formatTime(e.start_time) : null,
-        e.location_name,
-      ]
-        .filter(Boolean)
-        .join(" · "),
+      subtitle: e.location_name ?? "",
       href: `/app/events/${e.id}`,
     }));
 
@@ -82,51 +98,22 @@ export default async function EventsPage({
       return {
         kind: "meetup" as const,
         id: m.id,
-        sortAt: m.when_at,
+        at: m.when_at,
         title: m.title,
-        subtitle: [host?.full_name ? `Hosted by ${host.full_name}` : null, m.location_name]
-          .filter(Boolean)
-          .join(" · "),
+        subtitle:
+          [host?.full_name ? `Hosted by ${host.full_name}` : null, m.location_name]
+            .filter(Boolean)
+            .join(" · "),
         href: `/app/meetups/${m.id}`,
       };
     });
 
-    // Birthdays — compute the next occurrence (this year if still
-    // upcoming, else next year) so they sort correctly into the list.
-    const todayLocal = new Date();
-    todayLocal.setHours(0, 0, 0, 0);
-    const thisYear = todayLocal.getFullYear();
-    const birthdayEntries: CalendarEntry[] = (bdayPool ?? [])
-      .map((p: any): CalendarEntry | null => {
-        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(p.birthday ?? "");
-        if (!m) return null;
-        const month = Number(m[2]);
-        const day = Number(m[3]);
-        let next = new Date(thisYear, month - 1, day);
-        if (next < todayLocal) next = new Date(thisYear + 1, month - 1, day);
-        return {
-          kind: "birthday" as const,
-          id: p.id,
-          sortAt: next.toISOString(),
-          title: `${p.full_name}'s birthday`,
-          subtitle: next.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          }),
-          href: `/app/members/${p.id}`,
-        };
-      })
-      .filter((x): x is CalendarEntry => x !== null);
-
-    calendarEntries = [...eventEntries, ...meetupEntries, ...birthdayEntries]
-      .sort((a, b) => a.sortAt.localeCompare(b.sortAt))
-      // Window: show only the next 90 days so the list stays useful.
-      .filter((e) => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() + 90);
-        return new Date(e.sortAt) <= cutoff;
-      });
+    calendarEntries = [...eventEntries, ...meetupEntries];
+    calendarBirthdays = (bdayPool ?? []).map((p: any) => ({
+      id: p.id,
+      full_name: p.full_name,
+      birthday: p.birthday,
+    }));
   }
 
   // RSVP counts + my-RSVP for events being shown.
@@ -209,7 +196,7 @@ export default async function EventsPage({
       </div>
 
       {tab === "calendar" ? (
-        <CalendarView entries={calendarEntries} />
+        <CalendarView entries={calendarEntries} birthdays={calendarBirthdays} />
       ) : (
         <section className="space-y-3">
           {upcomingEvents.length === 0 ? (
@@ -245,16 +232,6 @@ export default async function EventsPage({
       )}
     </div>
   );
-}
-
-function formatTime(t: string): string {
-  // "18:30:00" -> "6:30 PM"
-  const [hh, mm] = t.split(":");
-  const h = Number(hh);
-  if (Number.isNaN(h)) return t;
-  const period = h >= 12 ? "PM" : "AM";
-  const display = h % 12 || 12;
-  return `${display}:${mm} ${period}`;
 }
 
 function TabPill({
