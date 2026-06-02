@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { searchMembersForMention } from "@/lib/feed/actions";
+import { searchMembersForMention, loadPostCommentsAction } from "@/lib/feed/actions";
 import { isBirthdayToday } from "@/lib/utils/birthday";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -73,6 +73,9 @@ export interface FeedPostShape {
   likes: number;
   liked_by_me: boolean;
   comments: FeedPostComment[];
+  /** Real comment count (separate from comments.length, which is the
+   * loaded-into-state preview count when comments lazy-load). */
+  comment_count?: number;
   /** Whether the viewer is allowed to see "preview"-style profile links instead of real ones. */
   preview?: boolean;
 }
@@ -108,9 +111,31 @@ export function FeedPost({
   const [comments, setComments] = useState<FeedPostComment[]>(
     Array.isArray(post.comments) ? post.comments : [],
   );
+  // Comments now load on-demand. comment_count is the truth source for
+  // the count badge; comments state is only populated after the user
+  // expands the post (or after they add a comment themselves).
+  const [commentsLoaded, setCommentsLoaded] = useState(
+    Array.isArray(post.comments) && post.comments.length > 0,
+  );
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
+  const [, startLoadComments] = useTransition();
+
+  function toggleComments() {
+    setShowComments((s) => {
+      const next = !s;
+      // Lazy-load comments the first time the user expands.
+      if (next && !commentsLoaded) {
+        startLoadComments(async () => {
+          const r = await loadPostCommentsAction(post.id);
+          if (!r.error) setComments(r.comments);
+          setCommentsLoaded(true);
+        });
+      }
+      return next;
+    });
+  }
 
   // @ mention picker for comment input. Uses the static list when one is
   // provided (preview mode), otherwise debounces a search action so the
@@ -349,14 +374,16 @@ export function FeedPost({
           </button>
 
           <button
-            onClick={() => setShowComments((s) => !s)}
+            onClick={toggleComments}
             className="flex items-center gap-1.5 px-3 h-9 rounded-full text-[13px] text-ink-200 hover:text-white transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
                  strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
               <path d="M21 12c0 4.2-4 7.5-9 7.5-1.4 0-2.7-.25-3.85-.7L3 21l1.55-4.4C3.6 15.4 3 13.75 3 12 3 7.85 7 4.5 12 4.5s9 3.35 9 7.5Z" />
             </svg>
-            <span className="tabular-nums">{comments.length}</span>
+            <span className="tabular-nums">
+              {commentsLoaded ? comments.length : (post.comment_count ?? 0)}
+            </span>
           </button>
 
           <div className="flex-1" />

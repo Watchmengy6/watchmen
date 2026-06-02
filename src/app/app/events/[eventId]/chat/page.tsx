@@ -2,15 +2,29 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
-import { ChatRoom } from "@/components/chat/ChatRoom";
+import { ThreadChatClient } from "@/app/app/dms/[threadId]/ThreadChatClient";
+import { markThreadReadAction } from "@/lib/dms/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function EventChatPage({ params }: { params: { eventId: string } }) {
-  const { user, profile } = await requireApproved();
+/**
+ * Event room chat — migrated to the threads/thread_messages stack
+ * (migration 00031). RSVP-going automatically syncs to thread_members
+ * via the trigger, so we just look up the thread by event_id and
+ * render the same client as DMs and group chats. This brings
+ * load-older pagination + the realtime author cache to event rooms.
+ */
+export default async function EventChatPage({
+  params,
+}: {
+  params: { eventId: string };
+}) {
+  const { profile } = await requireApproved();
   const supabase = supabaseServer();
 
-  // Gate: must be going to access the event room.
+  // Gate: must be going to access the event room. The thread_members
+  // sync trigger should have us in already, but we double-check at the
+  // page layer for clarity.
   const { data: rsvp } = await supabase
     .from("event_rsvps")
     .select("status")
@@ -28,88 +42,75 @@ export default async function EventChatPage({ params }: { params: { eventId: str
     .maybeSingle();
   if (!event) notFound();
 
-  const { data: chat } = await supabase
-    .from("chats")
-    .select("*")
-    .eq("type", "event")
+  const { data: thread } = await supabase
+    .from("threads")
+    .select("id")
+    .eq("kind", "event")
     .eq("event_id", event.id)
     .maybeSingle();
-  if (!chat) notFound();
+  if (!thread) notFound();
 
-  // Fetch newest 200, then reverse to render oldest→newest.
+  // Fetch newest 200 desc, render oldest→newest. ThreadChatClient
+  // handles "Load older" beyond that.
   const { data: messagesDesc } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("chat_id", chat.id)
+    .from("thread_messages")
+    .select(
+      "id, body, media_url, media_type, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
+    )
+    .eq("thread_id", thread.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
   const messages = (messagesDesc ?? []).slice().reverse();
 
-  const userIds = Array.from(new Set((messages ?? []).map((m) => m.user_id)));
-  const { data: authors } = userIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, full_name, profile_photo_url")
-        .in("id", userIds)
-    : { data: [] as any[] };
-  const authorMap: Record<string, any> = {};
-  for (const a of authors ?? []) authorMap[a.id] = a;
+  void markThreadReadAction(thread.id).catch(() => {});
 
-  const messageIds = (messages ?? []).map((m) => m.id);
-  const { data: reactions } = messageIds.length
-    ? await supabase
-        .from("message_reactions")
-        .select("message_id, user_id, reaction_type")
-        .in("message_id", messageIds)
-    : { data: [] };
-
-  const { data: polls } = await supabase
-    .from("polls")
-    .select("*")
-    .eq("chat_id", chat.id)
-    .order("created_at", { ascending: true });
-  const pollIds = (polls ?? []).map((p) => p.id);
-  const [{ data: pollOpts }, { data: pollVotes }] = await Promise.all([
-    pollIds.length
-      ? supabase.from("poll_options").select("id, poll_id, option_text").in("poll_id", pollIds)
-      : Promise.resolve({ data: [] as any[] }),
-    pollIds.length
-      ? supabase.from("poll_votes").select("poll_id, poll_option_id, user_id").in("poll_id", pollIds)
-      : Promise.resolve({ data: [] as any[] }),
-  ]);
-  const enrichedPolls = (polls ?? []).map((p) => ({
-    ...p,
-    options: (pollOpts ?? []).filter((o: any) => o.poll_id === p.id),
-    votes: (pollVotes ?? []).filter((v: any) => v.poll_id === p.id),
-  }));
+  const adapted = messages.map((m: any) => {
+    const a = Array.isArray(m.author) ? m.author[0] : m.author;
+    return {
+      id: m.id,
+      body: m.body ?? "",
+      media_url: m.media_url ?? null,
+      media_type: (m.media_type ?? "none") as "none" | "image" | "video",
+      created_at: m.created_at,
+      author_id: m.author_id,
+      author_name: a?.full_name ?? "Brother",
+      author_photo: a?.profile_photo_url ?? null,
+      is_me: m.author_id === profile.id,
+    };
+  });
 
   return (
-    <div className="relative">
-      <div className="fixed top-0 left-0 right-0 z-30 glass border-b border-white/[0.06]">
-        <div className="mx-auto max-w-screen-sm flex items-center justify-between px-4 py-2 safe-top gap-2">
+    <div className="min-h-[100dvh] bg-ink-900 flex flex-col">
+      <div
+        className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
+        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+      >
+        <div className="flex items-center gap-3 px-3 py-2.5">
           <Link
             href={`/app/events/${event.id}`}
-            className="text-ink-200 text-sm flex items-center"
+            aria-label="Back"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-ink-800 hairline text-ink-100 text-lg"
           >
-            ← Event
+            ‹
           </Link>
-          <div className="min-w-0 flex-1 text-center">
-            <div className="text-[10.5px] tracking-[0.25em] uppercase text-ink-300">Event Room</div>
-            <div className="text-white text-[14px] font-semibold truncate">{event.title}</div>
+          <div>
+            <div className="text-[10px] tracking-[0.3em] uppercase text-gold-300/80">
+              Event room
+            </div>
+            <div className="text-white text-[16px] font-semibold leading-tight">
+              {event.title}
+            </div>
           </div>
-          <div className="w-12" />
         </div>
       </div>
-      <ChatRoom
-        chatId={chat.id}
-        authUserId={user.id}
-        myProfileId={profile.id}
-        initialMessages={messages ?? []}
-        initialAuthors={authorMap}
-        initialReactions={reactions ?? []}
-        initialPolls={enrichedPolls as any}
-        eventId={event.id}
+
+      <ThreadChatClient
+        threadId={thread.id}
+        initialMessages={adapted}
+        meId={profile.id}
+        meName={profile.full_name}
+        meAvatar={profile.profile_photo_url}
       />
     </div>
   );

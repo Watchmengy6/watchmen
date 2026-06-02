@@ -108,24 +108,18 @@ export default async function HomePage() {
   // Phase 2: stats RPC (likes, comments, my-flags, poll votes) +
   // first-5 comment previews. Consolidated from 4 queries into 2.
   const postIds = (posts ?? []).map((p: any) => p.id);
-  const [{ data: statsRows }, { data: cs }] = postIds.length
-    ? await Promise.all([
-        supabase.rpc("home_feed_stats", {
-          p_post_ids: postIds,
-          p_viewer_id: profile.id,
-        }),
-        supabase
-          .from("post_comments")
-          .select(
-            "id, post_id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
-          )
-          .in("post_id", postIds)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: true }),
-      ])
-    : [{ data: [] }, { data: [] }];
+  // Phase 2 is now ONE query — home_feed_stats RPC returns likes,
+  // comment count, my-flags, and poll votes. Comments themselves are
+  // loaded on demand by FeedPost when a brother expands a post (see
+  // loadPostCommentsAction). This keeps /app/home from scaling with
+  // total comment volume.
+  const { data: statsRows } = postIds.length
+    ? await supabase.rpc("home_feed_stats", {
+        p_post_ids: postIds,
+        p_viewer_id: profile.id,
+      })
+    : { data: [] };
 
-  // Index stats by post id for O(1) lookup in the adapter.
   const statsByPost = new Map<
     string,
     {
@@ -145,14 +139,6 @@ export default async function HomePage() {
         typeof s.my_poll_vote === "number" ? s.my_poll_vote : null,
       poll_vote_counts: s.poll_vote_counts ?? null,
     });
-  });
-
-  // Group comments by post — keep them ascending for display.
-  const allComments = new Map<string, any[]>();
-  (cs ?? []).forEach((c: any) => {
-    const list = allComments.get(c.post_id) ?? [];
-    list.push(c);
-    allComments.set(c.post_id, list);
   });
 
   // Adapt to FeedPostShape.
@@ -221,17 +207,11 @@ export default async function HomePage() {
           : null,
       likes: stats?.like_count ?? 0,
       liked_by_me: stats?.my_liked ?? false,
-      comments: (allComments.get(p.id) ?? []).map((c: any) => {
-        const ca = Array.isArray(c.author) ? c.author[0] : c.author;
-        return {
-          id: c.id,
-          body: c.body,
-          created_at: c.created_at,
-          user_name: ca?.full_name ?? "Brother",
-          user_photo: ca?.profile_photo_url ?? null,
-          user_id: ca?.id,
-        };
-      }),
+      // Comments load on-demand when the brother expands a post.
+      // Home only carries the count; the actual rows come from
+      // loadPostCommentsAction triggered by FeedPost.
+      comments: [],
+      comment_count: stats?.comment_count ?? 0,
       preview: false,
     };
   });

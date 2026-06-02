@@ -70,7 +70,7 @@ async function resizeImageFile(
  * Returns { url, mediaType } on success, { error } on failure.
  */
 export async function uploadMedia(file: File): Promise<
-  | { url: string; mediaType: "image" | "video" }
+  | { url: string; mediaType: "image" | "video"; posterUrl?: string | null }
   | { error: string }
 > {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -87,8 +87,19 @@ export async function uploadMedia(file: File): Promise<
   const isVideo = file.type.startsWith("video/");
   if (!isImage && !isVideo) return { error: "Only images and videos allowed." };
 
-  // Limit 50 MB on the source file.
-  if (file.size > 50 * 1024 * 1024) return { error: "File too large (50 MB max)." };
+  // Videos: cap at 25 MB. Real transcoding belongs on a backend
+  // service (Mux, Cloudflare Stream) — too expensive to do reliably
+  // in-browser. The cap keeps phone recordings sane until then.
+  if (isVideo && file.size > 25 * 1024 * 1024) {
+    return {
+      error:
+        "Video is too big (25 MB max). Trim it shorter or record at lower quality.",
+    };
+  }
+  // Images: 50 MB ceiling on the source file before resize.
+  if (isImage && file.size > 50 * 1024 * 1024) {
+    return { error: "Image too large (50 MB max)." };
+  }
 
   // Downscale images before upload. Videos go through as-is.
   const payload = isImage ? await resizeImageFile(file) : file;
@@ -101,7 +112,110 @@ export async function uploadMedia(file: File): Promise<
   if (upErr) return { error: upErr.message };
 
   const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
-  return { url: data.publicUrl, mediaType: isImage ? "image" : "video" };
+
+  // For videos, also try to generate + upload a poster image from the
+  // first frame so the feed preview doesn't have to load the full
+  // video bytes just to render a card. Best-effort — if the browser
+  // can't decode the video (rare iOS edge case), we skip the poster.
+  let posterUrl: string | null = null;
+  if (isVideo) {
+    try {
+      const posterBlob = await generateVideoPoster(file);
+      if (posterBlob) {
+        const posterPath = `${user.id}/${Date.now()}-${safeName}.poster.jpg`;
+        const { error: pErr } = await supabase.storage
+          .from("chat-media")
+          .upload(posterPath, posterBlob, {
+            upsert: false,
+            contentType: "image/jpeg",
+          });
+        if (!pErr) {
+          const { data: pub } = supabase.storage
+            .from("chat-media")
+            .getPublicUrl(posterPath);
+          posterUrl = pub.publicUrl;
+        }
+      }
+    } catch {
+      /* poster generation is optional */
+    }
+  }
+
+  return {
+    url: data.publicUrl,
+    mediaType: isImage ? "image" : "video",
+    posterUrl,
+  };
+}
+
+/**
+ * Grab the first frame of a video file as a JPEG. Used to build a
+ * cheap poster for feed previews so the player doesn't autoload the
+ * full video. Returns null if the browser can't decode the source
+ * (older iOS Safari + uncommon codecs sometimes fail).
+ */
+async function generateVideoPoster(file: File): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = url;
+
+    function cleanup() {
+      URL.revokeObjectURL(url);
+    }
+
+    video.onloadedmetadata = () => {
+      // Seek a hair past 0 so we get an actual frame, not a black one.
+      video.currentTime = Math.min(0.1, video.duration / 4);
+    };
+    video.onseeked = () => {
+      try {
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        if (!w || !h) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        // Cap poster size to 1280px longest edge.
+        const maxEdge = 1280;
+        const scale = Math.min(1, maxEdge / Math.max(w, h));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (b) => {
+            cleanup();
+            resolve(b);
+          },
+          "image/jpeg",
+          0.85,
+        );
+      } catch {
+        cleanup();
+        resolve(null);
+      }
+    };
+    video.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+    // Safety timeout — some Safari versions hang on .onseeked silently.
+    setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 8000);
+  });
 }
 
 /**

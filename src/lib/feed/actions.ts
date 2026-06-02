@@ -7,6 +7,61 @@ import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
 
 /**
+ * Load comments for a single post on demand. Replaces the old
+ * "fetch every comment for every visible post on home page render"
+ * pattern, which scaled with engagement. Now home renders show the
+ * comment count from home_feed_stats, and we only hit the DB when a
+ * brother actually expands a post.
+ */
+export async function loadPostCommentsAction(
+  postId: string,
+): Promise<{
+  comments: {
+    id: string;
+    body: string;
+    created_at: string;
+    user_name: string;
+    user_photo: string | null;
+    user_id: string;
+  }[];
+  error?: string;
+}> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { comments: [], error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return { comments: [], error: "Approval required." };
+
+  const { data } = await supabase
+    .from("post_comments")
+    .select(
+      "id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
+    )
+    .eq("post_id", postId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  const comments = (data ?? []).map((c: any) => {
+    const a = Array.isArray(c.author) ? c.author[0] : c.author;
+    return {
+      id: c.id,
+      body: c.body,
+      created_at: c.created_at,
+      user_name: a?.full_name ?? "Brother",
+      user_photo: a?.profile_photo_url ?? null,
+      user_id: a?.id ?? "",
+    };
+  });
+  return { comments };
+}
+
+/**
  * Cast (or change) a vote on a feed poll. One vote per member per
  * post — upserts on (post_id, user_id).
  */

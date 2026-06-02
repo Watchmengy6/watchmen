@@ -38,17 +38,18 @@ export interface PushPayload {
 
 /**
  * Send a push notification to every device a given member has registered.
+ * Routes by `platform` — web subscriptions go through web-push (VAPID);
+ * native subscriptions (ios/android) are stubbed pending Capacitor wrap.
  * Failures are logged but never thrown.
  */
 export async function sendPushToUser(opts: {
   userId: string;
   payload: PushPayload;
 }): Promise<{ sent: number; failed: number }> {
-  if (!configure()) return { sent: 0, failed: 0 };
   const supabase = svc();
   const { data: subs, error } = await supabase
     .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
+    .select("id, endpoint, p256dh, auth, platform, device_token")
     .eq("user_id", opts.userId);
   if (error || !subs) {
     console.warn("[push] failed to load subs", error);
@@ -58,9 +59,28 @@ export async function sendPushToUser(opts: {
   let sent = 0;
   let failed = 0;
   const payloadJson = JSON.stringify(opts.payload);
+  const webConfigured = configure();
 
   await Promise.all(
-    subs.map(async (s) => {
+    subs.map(async (s: any) => {
+      const platform = s.platform ?? "web";
+      // Route by platform. Native delivery is stubbed until the
+      // Capacitor wrap ships and we wire APNs/FCM credentials in env.
+      if (platform === "ios" || platform === "android") {
+        const delivered = await sendNativePushStub({
+          platform,
+          deviceToken: s.device_token,
+          payload: opts.payload,
+        });
+        if (delivered) sent += 1;
+        else failed += 1;
+        return;
+      }
+      // Web path (existing).
+      if (!webConfigured) {
+        failed += 1;
+        return;
+      }
       try {
         await webpush.sendNotification(
           {
@@ -76,7 +96,6 @@ export async function sendPushToUser(opts: {
           .eq("id", s.id);
       } catch (e: any) {
         failed += 1;
-        // 404 / 410 means the endpoint is dead — clean it up.
         const status = e?.statusCode;
         if (status === 404 || status === 410) {
           await supabase.from("push_subscriptions").delete().eq("id", s.id);
@@ -88,6 +107,32 @@ export async function sendPushToUser(opts: {
   );
 
   return { sent, failed };
+}
+
+/**
+ * Stub native dispatcher. Will be implemented once we Capacitor-wrap
+ * the PWA and have APNs/FCM credentials. For now it logs the intent
+ * so we can see in Vercel that the route is reachable.
+ *
+ * To turn on:
+ *   - APNs: install `@parse/node-apn`, load .p8 key from env, send
+ *     with title/body/url payload.
+ *   - FCM: install `firebase-admin`, init with service account JSON
+ *     from env, send via messaging().send().
+ */
+async function sendNativePushStub(opts: {
+  platform: "ios" | "android";
+  deviceToken: string | null;
+  payload: PushPayload;
+}): Promise<boolean> {
+  if (!opts.deviceToken) return false;
+  // Once APNs/FCM are wired, replace this log with the real send.
+  // We deliberately don't throw so absent credentials never break
+  // the calling action.
+  console.log(
+    `[push.native:stub] would dispatch to ${opts.platform} token ${opts.deviceToken.slice(0, 8)}…: ${opts.payload.title}`,
+  );
+  return true;
 }
 
 /**
