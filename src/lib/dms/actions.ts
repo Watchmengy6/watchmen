@@ -34,6 +34,7 @@ export async function sendThreadMessageAction(
 
   if (!threadId) return { error: "Missing thread." };
   if (!body && !mediaUrl) return { error: "Empty message." };
+  if (body.length > 5000) return { error: "Message is too long (5000 char max)." };
 
   const supabase = supabaseServer();
   const {

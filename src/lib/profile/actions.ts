@@ -11,19 +11,23 @@ export async function updateProfileAction(_prev: unknown, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  const full_name = String(formData.get("full_name") ?? "").trim();
-  const bio = String(formData.get("bio") ?? "").trim();
-  const occupation = String(formData.get("occupation") ?? "").trim();
-  const company = String(formData.get("company") ?? "").trim();
-  const instagram_url = String(formData.get("instagram_url") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
-  const profile_photo_url = String(formData.get("profile_photo_url") ?? "").trim();
-  const usernameRaw = String(formData.get("username") ?? "").trim().toLowerCase();
-  const venmo = String(formData.get("venmo_username") ?? "").trim().replace(/^@/, "");
-  const cashapp = String(formData.get("cashapp_username") ?? "").trim().replace(/^\$/, "");
-  const birthday = String(formData.get("birthday") ?? "").trim();
-  const spouse = String(formData.get("spouse") ?? "").trim();
-  const kids = String(formData.get("kids") ?? "").trim();
+  // Cap free-text fields server-side so a crafted client can't store
+  // multi-MB payloads (DB bloat / abuse). Trim then slice to a sane max.
+  const cap = (key: string, max: number) =>
+    String(formData.get(key) ?? "").trim().slice(0, max);
+  const full_name = cap("full_name", 120);
+  const bio = cap("bio", 1000);
+  const occupation = cap("occupation", 200);
+  const company = cap("company", 200);
+  const instagram_url = cap("instagram_url", 300);
+  const phone = cap("phone", 40);
+  const profile_photo_url = cap("profile_photo_url", 600);
+  const usernameRaw = cap("username", 24).toLowerCase();
+  const venmo = cap("venmo_username", 60).replace(/^@/, "");
+  const cashapp = cap("cashapp_username", 60).replace(/^\$/, "");
+  const birthday = cap("birthday", 20);
+  const spouse = cap("spouse", 120);
+  const kids = cap("kids", 300);
   const interests = (formData.getAll("interests") as string[]).filter((i) =>
     INTERESTS.includes(i),
   );

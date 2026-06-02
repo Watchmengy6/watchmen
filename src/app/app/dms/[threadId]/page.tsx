@@ -53,9 +53,9 @@ export default async function DmThreadPage({
     .limit(200);
   const messages = (messagesDesc ?? []).slice().reverse();
 
-  // Mark this thread as read — fire-and-forget so we don't block render
-  // on an UPDATE roundtrip. The badge clears on the next nav.
-  void markThreadReadAction(thread.id).catch(() => {});
+  // Mark this thread as read before render so the inbox unread badge is
+  // reliably cleared when the user navigates back (single cheap row write).
+  await markThreadReadAction(thread.id).catch(() => {});
 
   const adapted = (messages ?? []).map((m: any) => {
     const a = Array.isArray(m.author) ? m.author[0] : m.author;

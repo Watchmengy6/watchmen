@@ -48,8 +48,8 @@ export async function fileReportAction(input: {
 
   const row: Record<string, unknown> = {
     reporter_id: me.id,
-    reason,
-    details: input.details?.trim() || null,
+    reason: reason.slice(0, 200),
+    details: input.details?.trim().slice(0, 2000) || null,
   };
   row[TARGET_COLS[input.target.kind]] = input.target.id;
 

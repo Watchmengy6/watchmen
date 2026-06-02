@@ -245,6 +245,7 @@ export async function createPostAction(
   const kindRaw = String(formData.get("kind") ?? "post");
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return { error: "Say something." };
+  if (body.length > 10000) return { error: "Post is too long (10,000 char max)." };
 
   // Member "meetup" + "poll" posts are stored as kind='post' with extra
   // structured columns. The post_kind enum stays unchanged — renderers
@@ -468,6 +469,7 @@ export async function addCommentAction(
 
   const trimmed = body.trim();
   if (!trimmed) return { error: "Empty comment." };
+  if (trimmed.length > 5000) return { error: "Comment is too long (5000 char max)." };
 
   const { data: row, error } = await supabase
     .from("post_comments")

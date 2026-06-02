@@ -132,7 +132,7 @@ export default async function EventDetail({ params }: { params: { eventId: strin
                   </span>
                 </Link>
               ))}
-              {attendees?.length === 0 ? (
+              {(attendees ?? []).length === 0 ? (
                 <div className="text-ink-400 text-sm">No one yet. Be first.</div>
               ) : null}
             </div>
