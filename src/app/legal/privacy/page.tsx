@@ -110,8 +110,11 @@ export default function PrivacyPolicyPage() {
               All connections use HTTPS. Passwords are hashed by Supabase
               Auth (we never see them). Database row-level security
               prevents one member from reading another member&apos;s private
-              data. Storage URLs for uploads are public-readable to
-              approved members only.
+              data. Uploaded photos and files are served from
+              unguessable public storage URLs: we don&apos;t list them
+              publicly, but anyone who has a given file&apos;s direct link
+              can open it without signing in. Avoid uploading anything you
+              wouldn&apos;t want shared outside the group.
             </p>
           </Section>
 

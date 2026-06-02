@@ -45,7 +45,7 @@ export interface PushPayload {
 export async function sendPushToUser(opts: {
   userId: string;
   payload: PushPayload;
-}): Promise<{ sent: number; failed: number }> {
+}): Promise<{ sent: number; failed: number; skipped: number }> {
   const supabase = svc();
   const { data: subs, error } = await supabase
     .from("push_subscriptions")
@@ -53,11 +53,15 @@ export async function sendPushToUser(opts: {
     .eq("user_id", opts.userId);
   if (error || !subs) {
     console.warn("[push] failed to load subs", error);
-    return { sent: 0, failed: 0 };
+    return { sent: 0, failed: 0, skipped: 0 };
   }
 
   let sent = 0;
   let failed = 0;
+  // Native (ios/android) sends are not wired to APNs/FCM yet. They are
+  // counted as `skipped` — NOT `sent` — so logs and delivery totals never
+  // report a false positive for a notification that didn't actually go out.
+  let skipped = 0;
   const payloadJson = JSON.stringify(opts.payload);
   const webConfigured = configure();
 
@@ -67,13 +71,12 @@ export async function sendPushToUser(opts: {
       // Route by platform. Native delivery is stubbed until the
       // Capacitor wrap ships and we wire APNs/FCM credentials in env.
       if (platform === "ios" || platform === "android") {
-        const delivered = await sendNativePushStub({
+        sendNativePushStub({
           platform,
           deviceToken: s.device_token,
           payload: opts.payload,
         });
-        if (delivered) sent += 1;
-        else failed += 1;
+        skipped += 1;
         return;
       }
       // Web path (existing).
@@ -106,33 +109,32 @@ export async function sendPushToUser(opts: {
     }),
   );
 
-  return { sent, failed };
+  return { sent, failed, skipped };
 }
 
 /**
  * Stub native dispatcher. Will be implemented once we Capacitor-wrap
- * the PWA and have APNs/FCM credentials. For now it logs the intent
- * so we can see in Vercel that the route is reachable.
+ * the PWA and have APNs/FCM credentials. For now it ONLY logs the intent
+ * so we can see in Vercel that the route is reachable — it does not
+ * deliver anything, which is why the caller books these as `skipped`.
  *
  * To turn on:
  *   - APNs: install `@parse/node-apn`, load .p8 key from env, send
  *     with title/body/url payload.
  *   - FCM: install `firebase-admin`, init with service account JSON
  *     from env, send via messaging().send().
+ * Once wired, return a real delivery boolean and have the caller count
+ * it as sent/failed instead of skipped.
  */
-async function sendNativePushStub(opts: {
+function sendNativePushStub(opts: {
   platform: "ios" | "android";
   deviceToken: string | null;
   payload: PushPayload;
-}): Promise<boolean> {
-  if (!opts.deviceToken) return false;
-  // Once APNs/FCM are wired, replace this log with the real send.
-  // We deliberately don't throw so absent credentials never break
-  // the calling action.
+}): void {
+  if (!opts.deviceToken) return;
   console.log(
-    `[push.native:stub] would dispatch to ${opts.platform} token ${opts.deviceToken.slice(0, 8)}…: ${opts.payload.title}`,
+    `[push.native:stub] NOT delivered (APNs/FCM not wired) — ${opts.platform} token ${opts.deviceToken.slice(0, 8)}…: ${opts.payload.title}`,
   );
-  return true;
 }
 
 /**
@@ -210,7 +212,8 @@ export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
   );
   const totalSent = results.reduce((s, r) => s + r.sent, 0);
   const totalFailed = results.reduce((s, r) => s + r.failed, 0);
+  const totalSkipped = results.reduce((s, r) => s + r.skipped, 0);
   console.log(
-    `[push.admins] done: ${totalSent} delivered, ${totalFailed} failed`,
+    `[push.admins] done: ${totalSent} delivered, ${totalFailed} failed, ${totalSkipped} skipped (native stub)`,
   );
 }

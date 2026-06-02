@@ -64,36 +64,40 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   });
   if (error) return { error: error.message };
 
-  // Fire-and-forget: notify admins that someone is waiting for approval.
-  // Email goes only if RESEND_ADMIN_NOTIFY_TO is set; push fires regardless.
-  try {
-    const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
-    if (adminInbox) {
-      const adminEmails = adminInbox
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (adminEmails.length > 0) {
-        await notifyAdminNewSignup({
-          adminEmails,
-          newMemberName: full_name,
-          newMemberEmail: email,
-        });
+  // Truly fire-and-forget: detach the admin email + push so slow
+  // provider latency never delays the new member's redirect to /pending.
+  // (Mirrors the fan-out pattern in fileReportAction.) Email goes only if
+  // RESEND_ADMIN_NOTIFY_TO is set; push fires regardless.
+  void (async () => {
+    try {
+      const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
+      if (adminInbox) {
+        const adminEmails = adminInbox
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (adminEmails.length > 0) {
+          await notifyAdminNewSignup({
+            adminEmails,
+            newMemberName: full_name,
+            newMemberEmail: email,
+          });
+        }
+      } else {
+        console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin email skipped");
       }
-    } else {
-      console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin email skipped");
+      // Push fires regardless of email config — admin push subscriptions
+      // are independent of the email notify env var.
+      await sendPushToAdmins({
+        title: "New signup awaiting approval",
+        body: `${full_name} just requested access`,
+        url: "/admin/pending",
+        tag: "admin-pending",
+      });
+    } catch (e) {
+      console.warn("[signup] admin notify failed (non-fatal)", e);
     }
-    // Push fires regardless of email config — admin push subscriptions
-    // are independent of the email notify env var.
-    await sendPushToAdmins({
-      title: "New signup awaiting approval",
-      body: `${full_name} just requested access`,
-      url: "/admin/pending",
-      tag: "admin-pending",
-    });
-  } catch (e) {
-    console.warn("[signup] admin notify failed (non-fatal)", e);
-  }
+  })();
 
   // The trigger creates the profile as pending. Take them to /pending.
   redirect("/pending");
