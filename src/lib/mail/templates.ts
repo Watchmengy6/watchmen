@@ -98,6 +98,32 @@ export function adminNewSignupTemplate(opts: {
   };
 }
 
+// -- New signup: confirmation that we got their request --------------------
+// Sent the moment someone completes the /signup form. Closes the loop so a
+// new applicant isn't staring at the "pending approval" screen wondering
+// if their form actually submitted.
+
+export function signupReceivedTemplate(opts: {
+  fullName: string;
+  appUrl: string;
+}): { subject: string; html: string; text: string } {
+  const { fullName, appUrl } = opts;
+  const firstName = fullName.split(" ")[0] || fullName;
+  return {
+    subject: `We got your request, ${firstName}`,
+    text: `${firstName},\n\nThanks for requesting access to The Watchmen. An admin will review your request and approve you as soon as they can.\n\nYou'll get another email and a push notification the moment you're in.\n\nGot Your 6.\n\n${appUrl}`,
+    html: shell({
+      preheader: `We received your request, ${firstName}. An admin will review it shortly.`,
+      bodyHtml: `
+        <h1 style="margin:8px 0 14px 0;font-size:22px;font-weight:600;color:${WHITE};">Request received, ${esc(firstName)}.</h1>
+        <p style="margin:0 0 14px 0;">Thanks for requesting access to The Watchmen. An admin will review your request and approve you as soon as they can.</p>
+        <p style="margin:0 0 14px 0;">You'll get another email and a push notification the moment you're in.</p>
+        <p style="margin:18px 0 0 0;color:${GOLD};font-size:13px;letter-spacing:0.18em;text-transform:uppercase;font-weight:600;">Got Your 6</p>
+      `,
+    }),
+  };
+}
+
 // -- New member: welcome after approval ------------------------------------
 
 export function welcomeApprovedTemplate(opts: {

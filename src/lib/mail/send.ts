@@ -9,6 +9,7 @@
 import { getResend, MAIL_FROM, MAIL_REPLY_TO, APP_URL } from "./client";
 import {
   adminNewSignupTemplate,
+  signupReceivedTemplate,
   welcomeApprovedTemplate,
   eventReminderTemplate,
   calendarInviteTemplate,
@@ -73,6 +74,23 @@ export async function notifyAdminNewSignup(opts: {
   });
   return send({
     to: opts.adminEmails,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
+}
+
+/** Confirmation email sent the moment someone completes /signup. */
+export async function signupReceived(opts: {
+  to: string;
+  fullName: string;
+}): Promise<SendResult> {
+  const tpl = signupReceivedTemplate({
+    fullName: opts.fullName,
+    appUrl: APP_URL,
+  });
+  return send({
+    to: opts.to,
     subject: tpl.subject,
     html: tpl.html,
     text: tpl.text,

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { notifyAdminNewSignup } from "@/lib/mail/send";
+import { notifyAdminNewSignup, signupReceived } from "@/lib/mail/send";
 import { sendPushToAdmins } from "@/lib/push/send";
 
 export async function loginAction(_prev: unknown, formData: FormData) {
@@ -64,10 +64,12 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   });
   if (error) return { error: error.message };
 
-  // Truly fire-and-forget: detach the admin email + push so slow
-  // provider latency never delays the new member's redirect to /pending.
-  // (Mirrors the fan-out pattern in fileReportAction.) Email goes only if
-  // RESEND_ADMIN_NOTIFY_TO is set; push fires regardless.
+  // Truly fire-and-forget: detach the admin email + push + applicant
+  // confirmation email so slow provider latency never delays the new
+  // member's redirect to /pending. (Mirrors the fan-out pattern in
+  // fileReportAction.) Admin email goes only if RESEND_ADMIN_NOTIFY_TO
+  // is set; the push to admins and the confirmation email to the new
+  // signup fire regardless.
   void (async () => {
     try {
       const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
@@ -86,6 +88,10 @@ export async function signupAction(_prev: unknown, formData: FormData) {
       } else {
         console.warn("[signup] RESEND_ADMIN_NOTIFY_TO not set — admin email skipped");
       }
+      // Confirmation email to the applicant — closes the loop so they
+      // know the request was received and they're not staring at the
+      // pending screen wondering if anything happened.
+      await signupReceived({ to: email, fullName: full_name });
       // Push fires regardless of email config — admin push subscriptions
       // are independent of the email notify env var.
       await sendPushToAdmins({

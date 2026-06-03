@@ -9,6 +9,9 @@ interface Props {
   meAvatar?: string | null;
   mentionablePeople?: { id: string; full_name: string; username: string }[];
   isAdmin?: boolean;
+  /** Signed-in viewer's profile id, so FeedPost can render the author
+      self-delete button on posts the viewer wrote. */
+  viewerProfileId?: string;
 }
 
 /**
@@ -22,6 +25,7 @@ export function FeedPostClient({
   meAvatar,
   mentionablePeople = [],
   isAdmin = false,
+  viewerProfileId,
 }: Props) {
   return (
     <FeedPost
@@ -30,6 +34,7 @@ export function FeedPostClient({
       meAvatar={meAvatar}
       mentionablePeople={mentionablePeople}
       isAdmin={isAdmin}
+      viewerProfileId={viewerProfileId}
       onToggleLike={async (postId, nextLiked) => {
         return await toggleLikeAction(postId, nextLiked);
       }}

@@ -14,6 +14,7 @@ import { SharePostButton } from "@/components/feed/SharePostButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { AdminDeletePostButton } from "@/components/feed/AdminDeletePostButton";
 import { AdminPinPostButton } from "@/components/feed/AdminPinPostButton";
+import { DeleteOwnPostButton } from "@/components/feed/DeleteOwnPostButton";
 import { FeedPollWidget } from "@/components/feed/FeedPollWidget";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
@@ -98,6 +99,8 @@ export interface FeedPostProps {
   mentionablePeople?: { id: string; full_name: string; username: string }[];
   /** When true, render the admin trash icon on the action bar. */
   isAdmin?: boolean;
+  /** Signed-in viewer's profile id — used to render the author self-delete button. */
+  viewerProfileId?: string;
 }
 
 export function FeedPost({
@@ -108,7 +111,9 @@ export function FeedPost({
   meAvatar,
   mentionablePeople = [],
   isAdmin = false,
+  viewerProfileId,
 }: FeedPostProps) {
+  const isAuthor = !!viewerProfileId && post.author?.id === viewerProfileId;
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likes, setLikes] = useState(post.likes);
   const [comments, setComments] = useState<FeedPostComment[]>(
@@ -423,6 +428,11 @@ export function FeedPost({
           {isAdmin ? (
             <AdminPinPostButton postId={post.id} initialPinned={!!post.pinned} />
           ) : null}
+          {/* Author can delete their own post. Admin delete is the heavier
+              hammer (red icon, service-role bypass) used for moderation; the
+              author button is shown to non-admin authors only so the action
+              row doesn't double up for an admin viewing their own post. */}
+          {isAuthor && !isAdmin ? <DeleteOwnPostButton postId={post.id} /> : null}
           {isAdmin ? <AdminDeletePostButton postId={post.id} /> : null}
         </div>
 

@@ -408,6 +408,7 @@ export default async function HomePage() {
                 meAvatar={profile.profile_photo_url}
                 mentionablePeople={mentionable}
                 isAdmin={isAdmin}
+                viewerProfileId={profile.id}
               />
             ))
           )}

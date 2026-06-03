@@ -181,9 +181,52 @@ export async function adminTogglePinPostAction(
 }
 
 /**
+ * Author self-delete: soft-delete a post the caller authored.
+ * Sets deleted_at if and only if the signed-in profile is the
+ * post's author_id. Admins use adminDeletePostAction for the
+ * "delete anyone's post" hammer; this one is "delete my own".
+ */
+export async function deleteOwnPostAction(
+  postId: string,
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return { error: "Approval required." };
+
+  // Verify ownership BEFORE the update so RLS doesn't silently no-op for
+  // a stranger and leave the user thinking it worked.
+  const { data: post, error: lookupErr } = await supabase
+    .from("posts")
+    .select("id, author_id, deleted_at")
+    .eq("id", postId)
+    .maybeSingle();
+  if (lookupErr) return { error: lookupErr.message };
+  if (!post) return { error: "Post not found." };
+  if (post.author_id !== me.id) return { error: "You can only delete your own posts." };
+  if (post.deleted_at) return { success: true };
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", postId)
+    .eq("author_id", me.id);
+  if (error) return { error: error.message };
+  revalidatePath("/app/home");
+  return { success: true };
+}
+
+/**
  * Admin moderation: soft-delete any feed post (sets deleted_at).
- * Authors can also delete their own posts via a separate flow; this
- * one is the heavy hammer for leadership.
+ * Used by leadership to take down anyone's post. Authors use
+ * deleteOwnPostAction for their own posts.
  */
 export async function adminDeletePostAction(
   postId: string,
