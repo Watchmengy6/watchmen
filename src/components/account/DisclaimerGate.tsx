@@ -96,8 +96,27 @@ export function DisclaimerGate({ videoUrl }: { videoUrl?: string }) {
             className="mt-1 h-4 w-4 accent-gold-400"
           />
           <span className="text-ink-100 text-[13px] leading-snug">
-            I&apos;ve read the code of conduct and I&apos;ll uphold it. I understand
-            I can lose access if I don&apos;t.
+            I&apos;ve read the code of conduct and I&apos;ll uphold it. I
+            understand I can lose access if I don&apos;t. I&apos;ve also
+            read and agree to the{" "}
+            <a
+              href="/legal/terms"
+              target="_blank"
+              rel="noopener"
+              className="underline text-gold-300"
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="/legal/privacy"
+              target="_blank"
+              rel="noopener"
+              className="underline text-gold-300"
+            >
+              Privacy Policy
+            </a>
+            .
           </span>
         </label>
 

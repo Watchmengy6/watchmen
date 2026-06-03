@@ -105,7 +105,11 @@ export default async function GroupsPage({
             New
           </Link>
         </div>
-        <div className="px-4 pb-2 flex gap-1.5 overflow-x-auto">
+        {/* Chip row goes full-bleed (-mx-4 cancels the parent's px-4)
+            with its own px-4 so the first/last chip don't kiss the edge.
+            scrollbar-none + the WKWebView indicator lock kills the
+            scroll indicator that read as "this is a webpage" earlier. */}
+        <div className="-mx-4 px-4 pb-2 flex gap-1.5 overflow-x-auto scrollbar-none">
           <FilterPill href="/app/groups?tab=all" label="All" count={(allGroups ?? []).length} active={tab === "all"} />
           <FilterPill href="/app/groups?tab=group" label="Groups" count={kindCounts.group} active={tab === "group"} accent="gold" />
           <FilterPill href="/app/groups?tab=meetup" label="Meet-ups" count={kindCounts.meetup} active={tab === "meetup"} accent="emerald" />

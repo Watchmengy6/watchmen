@@ -1,14 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import { signupAction } from "@/lib/auth/actions";
 
-function Submit() {
+function Submit({ disabled }: { disabled?: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant="gold" size="lg" fullWidth loading={pending}>
+    <Button
+      type="submit"
+      variant="gold"
+      size="lg"
+      fullWidth
+      loading={pending}
+      disabled={disabled || pending}
+    >
       Submit request
     </Button>
   );
@@ -16,6 +24,7 @@ function Submit() {
 
 export function SignupForm({ inviteCode }: { inviteCode: string }) {
   const [state, formAction] = useFormState(signupAction, { error: "" } as { error?: string });
+  const [agreedTerms, setAgreedTerms] = useState(false);
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="invite_code" defaultValue={inviteCode} />
@@ -78,10 +87,45 @@ export function SignupForm({ inviteCode }: { inviteCode: string }) {
         </div>
       ) : null}
 
-      <Submit />
+      {/* Explicit Terms + Privacy acceptance at signup. Apple App Store
+          review (Guideline 1.2 / 5.1.1) expects a clear consent moment
+          for UGC apps; the in-app disclaimer gate also re-confirms,
+          but this is the moment of contract formation. */}
+      <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
+        <input
+          type="checkbox"
+          checked={agreedTerms}
+          onChange={(e) => setAgreedTerms(e.target.checked)}
+          className="mt-1 h-4 w-4 accent-gold-400"
+        />
+        <span className="text-ink-200 text-[12.5px] leading-snug">
+          I&apos;m 18 or older and I agree to the{" "}
+          <a
+            href="/legal/terms"
+            target="_blank"
+            rel="noopener"
+            className="underline text-gold-300"
+          >
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a
+            href="/legal/privacy"
+            target="_blank"
+            rel="noopener"
+            className="underline text-gold-300"
+          >
+            Privacy Policy
+          </a>
+          . I understand The Watchmen is a private community and what&apos;s
+          shared here stays here.
+        </span>
+      </label>
+
+      <Submit disabled={!agreedTerms} />
 
       <p className="text-ink-400 text-xs text-center">
-        By continuing you agree to keep this community private.
+        Membership requires admin approval after you submit.
       </p>
     </form>
   );

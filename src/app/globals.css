@@ -43,6 +43,15 @@ input, textarea, select {
 
 ::-webkit-scrollbar { width: 0; height: 0; }
 
+/* Tailwind doesn't ship `scrollbar-none` out of the box; we use the class
+   on horizontal chip rows / pill bars across the app and depend on it
+   hiding both the WebKit indicator and the Firefox one. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
 /* Phone-frame for /preview on desktop. Mobile = full bleed. */
 @media (min-width: 768px) {
   .phone-frame {

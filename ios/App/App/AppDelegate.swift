@@ -78,6 +78,12 @@ private func lockWebViewBounces() {
         // Belt + suspenders for horizontal — bouncesZoom and contentInset
         // can still let the page rubber-band sideways on some iOS builds.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // Native apps don't show a side scrollbar indicator. CSS
+        // ::-webkit-scrollbar handles the document level, but WKWebView's
+        // scrollView has its own indicators on top — kill those too so
+        // the app reads as native, not a webpage in a frame.
+        webView.scrollView.showsVerticalScrollIndicator = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
     }
 }
 
