@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { uploadMedia } from "@/lib/uploads/client";
-import { searchMembersForMention } from "@/lib/feed/actions";
+import { listMentionableMembers } from "@/lib/feed/actions";
 
 // Meetup composer type removed per Dustin — informal coordination
 // happens via plain posts now, not a dedicated meetup type. The
@@ -93,40 +93,47 @@ export function FeedComposer({
     setMentionQuery(m ? m[1] : null);
   }
 
-  // Fetch matches from the server on demand (debounced) when no static
-  // list is provided. The static-list path is still used by the preview
-  // tree and any caller that wants to pre-populate.
-  const [remoteMatches, setRemoteMatches] = useState<MentionablePerson[]>([]);
+  // Load the mentionable members ONCE when the composer opens, then filter
+  // client-side. Doing a server round-trip per keystroke made the picker take
+  // several seconds to appear; this is a single load so filtering is instant.
+  // A caller may still pass a static `mentionablePeople` list (preview tree).
+  const [loadedPeople, setLoadedPeople] = useState<MentionablePerson[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
   useEffect(() => {
-    if (mentionablePeople.length > 0) return; // static list — no fetch
-    // mentionQuery === "" means the user just typed "@" with no query yet —
-    // still fetch so the picker pops immediately with suggestions. Only
-    // bail when there's no active "@" token at all (null).
-    if (mentionQuery === null) {
-      setRemoteMatches([]);
-      return;
-    }
+    if (!open) return;
+    if (mentionablePeople.length > 0) return; // static list provided
+    if (peopleLoaded) return; // already loaded this mount
     let cancelled = false;
-    const handle = window.setTimeout(async () => {
-      const rows = await searchMembersForMention(mentionQuery);
-      if (!cancelled) setRemoteMatches(rows);
-    }, 120);
+    (async () => {
+      const rows = await listMentionableMembers();
+      if (!cancelled) {
+        setLoadedPeople(rows);
+        setPeopleLoaded(true);
+      }
+    })();
     return () => {
       cancelled = true;
-      window.clearTimeout(handle);
     };
-  }, [mentionQuery, mentionablePeople.length]);
+  }, [open, mentionablePeople.length, peopleLoaded]);
+
+  const allMentionable =
+    mentionablePeople.length > 0 ? mentionablePeople : loadedPeople;
 
   const mentionMatches =
     mentionQuery === null
       ? []
-      : mentionablePeople.length > 0
-        ? mentionablePeople
-            .filter((u) =>
-              u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
-            )
-            .slice(0, 5)
-        : remoteMatches.slice(0, 5);
+      : (() => {
+          const q = mentionQuery.toLowerCase();
+          return allMentionable
+            .filter((u) => {
+              if (q === "") return true; // just "@" — show suggestions
+              return (
+                u.username?.toLowerCase().includes(q) ||
+                u.full_name?.toLowerCase().includes(q)
+              );
+            })
+            .slice(0, 6);
+        })();
 
   function insertMention(username: string) {
     const ta = textareaRef.current;

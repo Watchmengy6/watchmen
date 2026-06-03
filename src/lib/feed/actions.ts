@@ -236,6 +236,47 @@ export async function searchMembersForMention(
 }
 
 /**
+ * Load the full list of @mentionable members ONCE (when the composer opens),
+ * so the picker can filter client-side with zero per-keystroke network calls.
+ * Calling a server action on every keystroke made the picker take seconds to
+ * appear; this loads up to 500 approved members in a single round-trip.
+ */
+export async function listMentionableMembers(): Promise<
+  { id: string; full_name: string; username: string }[]
+> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return [];
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, username")
+    .eq("status", "approved")
+    .neq("id", me.id)
+    .not("username", "is", null)
+    .order("full_name")
+    .limit(500);
+  if (error) {
+    console.error("[listMentionableMembers] query failed", error);
+    return [];
+  }
+  return (data ?? []).filter((r) => r.username) as {
+    id: string;
+    full_name: string;
+    username: string;
+  }[];
+}
+
+/**
  * Create a feed post. Called from the FeedComposer client component
  * via the onSubmit prop. Accepts a FormData with:
  *   - kind   ('post' | 'job' | 'need' | 'announcement')
