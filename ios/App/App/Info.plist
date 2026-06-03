@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Watchmen only uses standard HTTPS / TLS via Apple's WebKit + URL
+	     loading system. That qualifies for the U.S. export-compliance
+	     encryption exemption, so we declare "non-exempt encryption: NO"
+	     to skip the prompt on every TestFlight + App Store upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
