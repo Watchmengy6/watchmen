@@ -80,12 +80,18 @@ export function FeedComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // @ mention picker: opens when user types "@" and shows live-filtered members.
-  // Allow hyphens because the username backfill produces dash-suffixed handles.
-  const mentionQuery = (() => {
-    const m = text.match(/@([\w-]*)$/);
-    return m ? m[1] : null;
-  })();
+  // @ mention picker state. `mentionQuery` is the text typed after the "@"
+  // immediately before the CARET (null = no active @ token). We compute it
+  // from the caret position rather than the end of the whole textarea, so the
+  // picker also works when an @mention is inserted in the middle of an
+  // already-typed post — not just at the very end.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+
+  function syncMentionQuery(value: string, caret: number) {
+    const upto = value.slice(0, Math.max(0, caret));
+    const m = upto.match(/@([\w-]*)$/);
+    setMentionQuery(m ? m[1] : null);
+  }
 
   // Fetch matches from the server on demand (debounced) when no static
   // list is provided. The static-list path is still used by the preview
@@ -93,7 +99,10 @@ export function FeedComposer({
   const [remoteMatches, setRemoteMatches] = useState<MentionablePerson[]>([]);
   useEffect(() => {
     if (mentionablePeople.length > 0) return; // static list — no fetch
-    if (mentionQuery === null || mentionQuery.length === 0) {
+    // mentionQuery === "" means the user just typed "@" with no query yet —
+    // still fetch so the picker pops immediately with suggestions. Only
+    // bail when there's no active "@" token at all (null).
+    if (mentionQuery === null) {
       setRemoteMatches([]);
       return;
     }
@@ -120,14 +129,25 @@ export function FeedComposer({
         : remoteMatches.slice(0, 5);
 
   function insertMention(username: string) {
-    const newText = text.replace(/@([\w-]*)$/, `@${username} `);
+    const ta = textareaRef.current;
+    const caret = ta?.selectionStart ?? text.length;
+    const before = text.slice(0, caret).replace(/@([\w-]*)$/, `@${username} `);
+    const after = text.slice(caret);
+    const newText = before + after;
     setText(newText);
-    textareaRef.current?.focus();
+    setMentionQuery(null);
+    const newCaret = before.length;
+    // Restore focus + place the caret right after the inserted handle.
+    requestAnimationFrame(() => {
+      ta?.focus();
+      ta?.setSelectionRange(newCaret, newCaret);
+    });
   }
 
   function reset() {
     setOpen(false);
     setText("");
+    setMentionQuery(null);
     setTaggedGroupId(null);
     setGroupPickerOpen(false);
     setErr(null);
@@ -317,7 +337,17 @@ export function FeedComposer({
             <textarea
               ref={textareaRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                syncMentionQuery(
+                  e.target.value,
+                  e.target.selectionStart ?? e.target.value.length,
+                );
+              }}
+              onSelect={(e) => {
+                const t = e.currentTarget;
+                syncMentionQuery(t.value, t.selectionStart ?? t.value.length);
+              }}
               rows={3}
               placeholder={
                 type === "job"

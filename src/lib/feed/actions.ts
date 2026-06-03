@@ -178,14 +178,15 @@ export async function adminDeletePostAction(
  * on page load and filter client-side" pattern, which dragged on the home
  * feed as the community grew.
  *
- * Returns up to 8 username-matching approved members. Empty query → empty
- * list (nothing to filter against, and we don't want to leak a directory).
+ * Returns up to 8 approved members. With NO query (the moment the user
+ * types "@") it returns the first members alphabetically as suggestions,
+ * so the picker reliably pops; with a query it matches full_name
+ * (substring) OR username (prefix).
  */
 export async function searchMembersForMention(
   query: string,
 ): Promise<{ id: string; full_name: string; username: string }[]> {
   const q = (query ?? "").trim().toLowerCase();
-  if (q.length === 0) return [];
 
   const supabase = supabaseServer();
   const {
@@ -200,24 +201,32 @@ export async function searchMembersForMention(
     .maybeSingle();
   if (!me || me.status !== "approved") return [];
 
-  // Members type a person's NAME after "@", not their handle — so match
-  // full_name (substring) OR username (prefix). Sanitize the query for the
-  // PostgREST or-filter (commas/parens/wildcards would otherwise break it).
-  const safe = q
-    .replace(/[,()]/g, " ")
-    .replace(/[%_]/g, (c) => `\\${c}`)
-    .trim();
-  if (!safe) return [];
-
-  const { data } = await supabase
+  let qb = supabase
     .from("profiles")
     .select("id, full_name, username")
     .eq("status", "approved")
     .neq("id", me.id)
-    .not("username", "is", null)
-    .or(`username.ilike.${safe}%,full_name.ilike.%${safe}%`)
-    .order("full_name")
-    .limit(8);
+    .not("username", "is", null);
+
+  if (q.length > 0) {
+    // Members type a person's NAME after "@", not their handle — so match
+    // full_name (substring) OR username (prefix). Strip chars that would
+    // break the PostgREST or-filter (commas/parens/periods are delimiters;
+    // %/_ are LIKE wildcards) before interpolating.
+    const safe = q
+      .replace(/[,.()]/g, " ")
+      .replace(/[%_]/g, (c) => `\\${c}`)
+      .trim();
+    if (safe) {
+      qb = qb.or(`username.ilike.${safe}%,full_name.ilike.%${safe}%`);
+    }
+  }
+
+  const { data, error } = await qb.order("full_name").limit(8);
+  if (error) {
+    console.error("[searchMembersForMention] query failed", error);
+    return [];
+  }
 
   return (data ?? []).filter((r) => r.username) as {
     id: string;
