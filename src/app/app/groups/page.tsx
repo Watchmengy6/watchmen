@@ -4,9 +4,10 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// Per Dustin: Groups, Meet-ups, Hobbies are three flavors of community
-// sub-units. Each is color-coded so brothers can scan the grid quickly.
-type Kind = "group" | "meetup" | "hobby";
+// Per Dustin's revised call: Groups and Meet-ups are the two flavors of
+// community sub-units. Hobbies were collapsed into Groups (migration
+// 00037) because the Category field already covered the distinction.
+type Kind = "group" | "meetup";
 type Tab = "all" | Kind | "joined";
 
 const KIND_STYLES: Record<Kind, { ring: string; pillBg: string; pillText: string; tintGrad: string }> = {
@@ -22,12 +23,6 @@ const KIND_STYLES: Record<Kind, { ring: string; pillBg: string; pillText: string
     pillText: "text-emerald-200",
     tintGrad: "from-emerald-500/25 via-emerald-800/10",
   },
-  hobby: {
-    ring: "ring-violet-500/40",
-    pillBg: "bg-violet-500/15",
-    pillText: "text-violet-200",
-    tintGrad: "from-violet-500/25 via-violet-800/10",
-  },
 };
 
 export default async function GroupsPage({
@@ -39,7 +34,7 @@ export default async function GroupsPage({
   const supabase = supabaseServer();
   const tabRaw = searchParams?.tab ?? "all";
   const tab: Tab = (
-    ["all", "group", "meetup", "hobby", "joined"] as const
+    ["all", "group", "meetup", "joined"] as const
   ).includes(tabRaw as Tab)
     ? (tabRaw as Tab)
     : "all";
@@ -72,7 +67,7 @@ export default async function GroupsPage({
   }
 
   // Tab counts (per kind).
-  const kindCounts: Record<Kind, number> = { group: 0, meetup: 0, hobby: 0 };
+  const kindCounts: Record<Kind, number> = { group: 0, meetup: 0 };
   (allGroups ?? []).forEach((g: any) => {
     const k = (g.kind ?? "group") as Kind;
     if (kindCounts[k] !== undefined) kindCounts[k] += 1;
@@ -85,7 +80,7 @@ export default async function GroupsPage({
         className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
-        <div className="flex items-center justify-between px-4 py-2.5">
+        <div className="flex items-center justify-between px-5 py-2.5">
           <div>
             <div className="text-[10px] tracking-[0.3em] uppercase text-gold-300/80">
               Brotherhood
@@ -105,20 +100,18 @@ export default async function GroupsPage({
             New
           </Link>
         </div>
-        {/* Chip row: own px-4 to inset from screen edges (the sticky
-            parent has no horizontal padding so pages can control it).
-            scrollbar-none + the WKWebView indicator lock kills the
-            scroll indicator that read as "this is a webpage" earlier. */}
-        <div className="px-4 pb-2 flex gap-1 overflow-x-auto scrollbar-none">
+        {/* Chip row: px-5 to match the header row inset above and the
+            page content inset below. scrollbar-none + the WKWebView
+            indicator lock kills the scroll indicator. */}
+        <div className="px-5 pb-2 flex gap-1.5 overflow-x-auto scrollbar-none">
           <FilterPill href="/app/groups?tab=all" label="All" count={(allGroups ?? []).length} active={tab === "all"} />
           <FilterPill href="/app/groups?tab=group" label="Groups" count={kindCounts.group} active={tab === "group"} accent="gold" />
           <FilterPill href="/app/groups?tab=meetup" label="Meet-ups" count={kindCounts.meetup} active={tab === "meetup"} accent="emerald" />
-          <FilterPill href="/app/groups?tab=hobby" label="Hobbies" count={kindCounts.hobby} active={tab === "hobby"} accent="violet" />
           <FilterPill href="/app/groups?tab=joined" label="Joined" count={joinedCount} active={tab === "joined"} />
         </div>
       </div>
 
-      <div className="px-4 pt-3">
+      <div className="px-5 pt-3">
         {list.length === 0 ? (
           <div className="text-center text-ink-300 text-sm py-10">
             {tab === "joined"
@@ -213,8 +206,8 @@ function FilterPill({
       href={href}
       className={
         active
-          ? `shrink-0 h-8 px-2.5 rounded-full bg-white text-black font-semibold text-[12px] inline-flex items-center gap-1 ring-1 ${accentRing}`
-          : `shrink-0 h-8 px-2.5 rounded-full bg-ink-800 hairline text-ink-200 text-[12px] inline-flex items-center gap-1 ring-1 ${accentRing}`
+          ? `shrink-0 h-8 px-3 rounded-full bg-white text-black font-semibold text-[12.5px] inline-flex items-center gap-1.5 ring-1 ${accentRing}`
+          : `shrink-0 h-8 px-3 rounded-full bg-ink-800 hairline text-ink-200 text-[12.5px] inline-flex items-center gap-1.5 ring-1 ${accentRing}`
       }
     >
       {label}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 
-type Kind = "group" | "meetup" | "hobby";
+type Kind = "group" | "meetup";
 
 interface KindOption {
   id: Kind;
@@ -19,7 +19,7 @@ const OPTIONS: KindOption[] = [
   {
     id: "group",
     label: "Group",
-    hint: "Ongoing — Run Club, Bible Study",
+    hint: "Ongoing — Run Club, Bible Study, Super Cars",
     pillBg: "bg-gold-500/15",
     pillText: "text-gold-200",
     ringActive: "ring-gold-500/60",
@@ -27,18 +27,10 @@ const OPTIONS: KindOption[] = [
   {
     id: "meetup",
     label: "Meet-up",
-    hint: "Scheduled — a concert, a hike",
+    hint: "Scheduled — a concert, a hike, a dinner",
     pillBg: "bg-emerald-500/15",
     pillText: "text-emerald-200",
     ringActive: "ring-emerald-500/60",
-  },
-  {
-    id: "hobby",
-    label: "Hobby",
-    hint: "Interest-based — shooting, cars",
-    pillBg: "bg-violet-500/15",
-    pillText: "text-violet-200",
-    ringActive: "ring-violet-500/60",
   },
 ];
 
@@ -59,7 +51,7 @@ export function GroupKindPicker({ defaultValue = "group" }: { defaultValue?: Kin
         Kind
       </div>
       <input type="hidden" name="kind" value={kind} />
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {OPTIONS.map((opt) => {
           const active = kind === opt.id;
           return (

@@ -11,10 +11,12 @@ const CATEGORIES = ["Coffee", "Workout", "Drinks", "Outdoors", "Food", "Other"];
 
 export default async function NewMeetupPage() {
   const { profile } = await requireApproved();
-  // Meetups are admin-only per Dustin. Non-admins get bounced to the
-  // meetups list rather than seeing a form they can't submit.
+  // Meetups are admin-only per Dustin. Non-admins get bounced back to
+  // the Groups tab (filtered to meet-ups) instead of the standalone
+  // /app/meetups list, which has no bottom-nav entry and would strand
+  // them on a dead-end page.
   if (profile.role !== "admin" && profile.role !== "super_admin") {
-    redirect("/app/meetups");
+    redirect("/app/groups?tab=meetup");
   }
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
@@ -23,8 +25,12 @@ export default async function NewMeetupPage() {
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-3 px-3 py-2.5">
+          {/* Back goes to the Groups tab (where the user entered the
+              meet-up creation flow via the kind picker). The standalone
+              /app/meetups list has no bottom-nav entry so we never
+              route back to it — it would trap users on a dead-end. */}
           <Link
-            href="/app/meetups"
+            href="/app/groups?tab=meetup"
             aria-label="Back"
             className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-ink-800 hairline text-ink-100 text-lg"
           >
