@@ -52,7 +52,7 @@ export async function loadMoreMembersAction(input: {
       .trim();
     if (safe) {
       query = query.or(
-        `full_name.ilike.%${safe}%,occupation.ilike.%${safe}%,company.ilike.%${safe}%`,
+        `full_name.ilike.%${safe}%,occupation.ilike.%${safe}%,company.ilike.%${safe}%,username.ilike.%${safe}%`,
       );
     }
   }

@@ -200,13 +200,22 @@ export async function searchMembersForMention(
     .maybeSingle();
   if (!me || me.status !== "approved") return [];
 
+  // Members type a person's NAME after "@", not their handle — so match
+  // full_name (substring) OR username (prefix). Sanitize the query for the
+  // PostgREST or-filter (commas/parens/wildcards would otherwise break it).
+  const safe = q
+    .replace(/[,()]/g, " ")
+    .replace(/[%_]/g, (c) => `\\${c}`)
+    .trim();
+  if (!safe) return [];
+
   const { data } = await supabase
     .from("profiles")
     .select("id, full_name, username")
     .eq("status", "approved")
     .neq("id", me.id)
     .not("username", "is", null)
-    .ilike("username", `${q}%`)
+    .or(`username.ilike.${safe}%,full_name.ilike.%${safe}%`)
     .order("full_name")
     .limit(8);
 
