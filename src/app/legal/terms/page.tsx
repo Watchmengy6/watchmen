@@ -237,8 +237,8 @@ export default function TermsPage() {
             <p>
               If you believe Your Content has been infringed inside
               the Service, send a written DMCA notice to{" "}
-              <a className="underline" href="mailto:legal@gy6.me">
-                legal@gy6.me
+              <a className="underline" href="mailto:dustin@gy6.me">
+                dustin@gy6.me
               </a>{" "}
               including: (a) identification of the copyrighted work,
               (b) identification of the infringing material with
@@ -474,8 +474,8 @@ export default function TermsPage() {
               <br />
               St. Petersburg, Florida, USA
               <br />
-              <a className="underline" href="mailto:legal@gy6.me">
-                legal@gy6.me
+              <a className="underline" href="mailto:dustin@gy6.me">
+                dustin@gy6.me
               </a>
             </p>
           </Section>

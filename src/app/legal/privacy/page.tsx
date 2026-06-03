@@ -32,9 +32,13 @@ export default function PrivacyPolicyPage() {
           <Section title="Who we are">
             <p>
               The Watchmen is a private, invite-only community app operated
-              by The Watchmen leadership in St. Petersburg, Florida. We can
-              be reached at the email address you used to sign up; for
-              data requests, contact your admin.
+              by The Watchmen leadership in St. Petersburg, Florida. For
+              questions about this Privacy Policy, data access, correction,
+              or deletion requests, email{" "}
+              <a className="underline" href="mailto:dustin@gy6.me">
+                dustin@gy6.me
+              </a>
+              .
             </p>
           </Section>
 
@@ -138,8 +142,11 @@ export default function PrivacyPolicyPage() {
                 or member. Leadership reviews within 24 hours.
               </li>
               <li>
-                <strong>Export or correct your data:</strong> contact
-                your admin and we&apos;ll provide it within 30 days.
+                <strong>Export or correct your data:</strong> email{" "}
+                <a className="underline" href="mailto:dustin@gy6.me">
+                  dustin@gy6.me
+                </a>{" "}
+                and we&apos;ll provide it within 30 days.
               </li>
             </ul>
           </Section>
@@ -148,8 +155,11 @@ export default function PrivacyPolicyPage() {
             <p>
               The Watchmen is for adults (18+) only. We do not knowingly
               collect data from anyone under 18. If you believe a child
-              has accessed the app, contact your admin so we can remove
-              the account.
+              has accessed the app, email{" "}
+              <a className="underline" href="mailto:dustin@gy6.me">
+                dustin@gy6.me
+              </a>{" "}
+              so we can remove the account.
             </p>
           </Section>
 
