@@ -115,13 +115,17 @@ export default async function HomePage() {
   // loaded on demand by FeedPost when a brother expands a post (see
   // loadPostCommentsAction). This keeps /app/home from scaling with
   // total comment volume.
-  // home_feed_stats derives the viewer from current_profile_id()
-  // internally now (was caller-supplied) — see migration 00033.
-  const { data: statsRows } = postIds.length
+  // home_feed_stats derives the viewer from current_profile_id() inside
+  // the SD function (migration 00033_audit_p1_p2_hardening) — p_viewer_id
+  // is retained in the signature for call-compat and is ignored
+  // server-side. We pass profile.id so PostgREST picks the right overload.
+  const { data: statsRows, error: statsErr } = postIds.length
     ? await supabase.rpc("home_feed_stats", {
         p_post_ids: postIds,
+        p_viewer_id: profile.id,
       })
-    : { data: [] };
+    : { data: [], error: null };
+  if (statsErr) console.error("[/app/home] home_feed_stats failed", statsErr);
 
   const statsByPost = new Map<
     string,
