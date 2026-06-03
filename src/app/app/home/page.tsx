@@ -88,7 +88,7 @@ export default async function HomePage() {
       .from("posts")
       .select(
         `id, kind, body, created_at, media_url, meetup_when_at, meetup_location,
-         poll_question, poll_options,
+         poll_question, poll_options, pinned,
          author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company, birthday),
          tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
          tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
@@ -98,6 +98,8 @@ export default async function HomePage() {
          )`,
       )
       .is("deleted_at", null)
+      // Pinned posts float to the top; within each group, newest first.
+      .order("pinned", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
@@ -165,6 +167,7 @@ export default async function HomePage() {
       body: p.body,
       created_at: p.created_at,
       image_url: p.media_url ?? null,
+      pinned: !!p.pinned,
       // Member-meetup feed posts carry structured when/where so the
       // renderer can show a card without resolving a meetup entity.
       meetup_when_at: p.meetup_when_at ?? null,

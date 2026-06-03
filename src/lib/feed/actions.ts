@@ -136,6 +136,51 @@ export async function votePollAction(input: {
 }
 
 /**
+ * Admin pin/unpin a feed post. Pinned posts float to the top of the
+ * home feed regardless of created_at. Toggles the current state so
+ * one button serves both directions.
+ */
+export async function adminTogglePinPostAction(
+  postId: string,
+): Promise<{ error?: string; pinned?: boolean }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || (me.role !== "admin" && me.role !== "super_admin")) {
+    return { error: "Admin only." };
+  }
+
+  // Service-role write so the column update can't be blocked by any
+  // tightened post update policy in the future.
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+  const { data: cur } = await admin
+    .from("posts")
+    .select("pinned")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!cur) return { error: "Post not found." };
+  const nextPinned = !cur.pinned;
+  const { error } = await admin
+    .from("posts")
+    .update({ pinned: nextPinned })
+    .eq("id", postId);
+  if (error) return { error: error.message };
+  revalidatePath("/app/home");
+  return { pinned: nextPinned };
+}
+
+/**
  * Admin moderation: soft-delete any feed post (sets deleted_at).
  * Authors can also delete their own posts via a separate flow; this
  * one is the heavy hammer for leadership.

@@ -13,6 +13,7 @@ import { RichText } from "@/components/feed/RichText";
 import { SharePostButton } from "@/components/feed/SharePostButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { AdminDeletePostButton } from "@/components/feed/AdminDeletePostButton";
+import { AdminPinPostButton } from "@/components/feed/AdminPinPostButton";
 import { FeedPollWidget } from "@/components/feed/FeedPollWidget";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
@@ -78,6 +79,8 @@ export interface FeedPostShape {
   comment_count?: number;
   /** Whether the viewer is allowed to see "preview"-style profile links instead of real ones. */
   preview?: boolean;
+  /** Pinned posts float to the top of the feed regardless of created_at. */
+  pinned?: boolean;
 }
 
 export interface FeedPostProps {
@@ -270,6 +273,14 @@ export function FeedPost({
                   </span>
                 ) : null}
               </Link>
+              {post.pinned ? (
+                <span
+                  className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-gold-500/20 ring-1 ring-gold-500/40 text-gold-200 text-[10px] tracking-[0.18em] uppercase font-semibold"
+                  title="Pinned by admin"
+                >
+                  📌 Pinned
+                </span>
+              ) : null}
               {post.type === "job" ? (
                 <Badge variant="gold">Hiring</Badge>
               ) : post.type === "need" ? (
@@ -409,6 +420,9 @@ export function FeedPost({
             className="px-3 h-9 text-ink-400 text-[12px] hover:text-white"
             label="Report"
           />
+          {isAdmin ? (
+            <AdminPinPostButton postId={post.id} initialPinned={!!post.pinned} />
+          ) : null}
           {isAdmin ? <AdminDeletePostButton postId={post.id} /> : null}
         </div>
 
