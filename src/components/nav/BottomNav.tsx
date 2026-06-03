@@ -71,7 +71,14 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 bg-ink-900/70 backdrop-blur-xl border-t border-white/[0.05]"
-      style={{ paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
+      // env(safe-area-inset-bottom, 20px) gives us the iOS home-indicator
+      // clearance, with a 20px fallback if env() resolves to 0 (which
+      // can happen in Capacitor WebView when viewport-fit hasn't fully
+      // settled). We always add +0.375rem on top so labels never kiss
+      // the indicator pill.
+      style={{
+        paddingBottom: "calc(env(safe-area-inset-bottom, 20px) + 0.375rem)",
+      }}
     >
       <div className="grid grid-cols-5 pt-1.5">
         {tabs.map(({ href, label, Icon }) => {

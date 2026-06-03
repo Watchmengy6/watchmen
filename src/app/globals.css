@@ -28,6 +28,9 @@ html, body {
      the app never slides left/right like a webpage. */
   overflow-x: hidden;
   width: 100%;
+  /* touch-action pan-y tells the WebView to only handle vertical pans;
+     two-finger or edge horizontal swipes won't rubber-band the doc. */
+  touch-action: pan-y;
 }
 
 * {
