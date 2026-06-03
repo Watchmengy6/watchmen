@@ -22,14 +22,11 @@ export function PushReceiver() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-    function onMessage(e: MessageEvent) {
-      const data = e?.data;
-      if (!data || data.type !== "watchmen:push" || !data.payload) return;
-      const p = data.payload as { title?: string; body?: string; url?: string; tag?: string };
+    function pushBanner(p: { title?: string; body?: string; url?: string | null }) {
+      const url = p.url || "/app/home";
       // Don't notify about the page we're already on (e.g. you're in the
       // DM thread that just got a message).
-      if (p.url && pathname && p.url === pathname) return;
+      if (url && pathname && url === pathname) return;
       const id = Date.now() + Math.random();
       setBanners((prev) => [
         ...prev,
@@ -37,7 +34,7 @@ export function PushReceiver() {
           id,
           title: p.title || "The Watchmen",
           body: p.body || "",
-          url: p.url || "/app/home",
+          url,
         },
       ]);
       // Auto-dismiss after 5s.
@@ -45,9 +42,35 @@ export function PushReceiver() {
         setBanners((prev) => prev.filter((b) => b.id !== id));
       }, 5000);
     }
-    navigator.serviceWorker.addEventListener("message", onMessage);
+
+    // Web path — service worker posts the push payload to the page.
+    let hasSW = false;
+    function onSwMessage(e: MessageEvent) {
+      const data = e?.data;
+      if (!data || data.type !== "watchmen:push" || !data.payload) return;
+      pushBanner(data.payload);
+    }
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      hasSW = true;
+      navigator.serviceWorker.addEventListener("message", onSwMessage);
+    }
+
+    // Native (Capacitor) path — the nativeClient dispatches this custom
+    // event on the window for every foreground push so the in-app
+    // banner UX matches the web path on iOS where the system banner is
+    // suppressed in foreground.
+    function onNative(e: Event) {
+      const ce = e as CustomEvent;
+      if (!ce.detail) return;
+      pushBanner(ce.detail);
+    }
+    window.addEventListener("watchmen:native-push", onNative as EventListener);
+
     return () => {
-      navigator.serviceWorker.removeEventListener("message", onMessage);
+      if (hasSW) {
+        navigator.serviceWorker.removeEventListener("message", onSwMessage);
+      }
+      window.removeEventListener("watchmen:native-push", onNative as EventListener);
     };
   }, [pathname]);
 

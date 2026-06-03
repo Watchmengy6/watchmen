@@ -36,12 +36,20 @@ export function EnablePushButton() {
     (async () => {
       // Feature checks.
       if (typeof window === "undefined") return;
-      // Capacitor wrap: web push is irrelevant here — iOS will use APNs
-      // via the @capacitor/push-notifications plugin once it's wired.
-      // Until then show a native-only message instead of the misleading
-      // "this browser doesn't support push" copy.
+      // Capacitor wrap: skip the web push branch entirely; the
+      // NativePushRegistrar component already requested permission and
+      // registered an APNs/FCM token at app launch. Reflect the current
+      // permission state so the user can re-trigger it if they declined.
       if ((window as any).Capacitor?.isNativePlatform?.()) {
-        setState("native-pending");
+        try {
+          const { PushNotifications } = await import("@capacitor/push-notifications");
+          const perm = await PushNotifications.checkPermissions();
+          if (perm.receive === "granted") setState("on");
+          else if (perm.receive === "denied") setState("denied");
+          else setState("native-pending");
+        } catch {
+          setState("native-pending");
+        }
         return;
       }
       const supported =
@@ -155,9 +163,34 @@ export function EnablePushButton() {
   }
   if (state === "native-pending") {
     return (
-      <div className="rounded-xl bg-ink-800 hairline p-3 text-[13px] text-ink-200 leading-relaxed">
-        Push notifications for the iOS app are coming in the next update. In the meantime, the brotherhood will reach you here whenever you open the app.
-      </div>
+      <button
+        onClick={async () => {
+          setState("busy");
+          try {
+            const { PushNotifications } = await import("@capacitor/push-notifications");
+            const perm = await PushNotifications.requestPermissions();
+            if (perm.receive !== "granted") {
+              setState(perm.receive === "denied" ? "denied" : "native-pending");
+              push({ title: "Notifications declined", variant: "error" });
+              return;
+            }
+            await PushNotifications.register();
+            push({ title: "Notifications on", variant: "success" });
+            setState("on");
+          } catch (e: any) {
+            push({ title: "Couldn't enable", body: e?.message, variant: "error" });
+            setState("native-pending");
+          }
+        }}
+        className={`${baseBtn} bg-gradient-to-b from-gold-300 to-gold-500 text-black`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+             strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+          <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
+          <path d="M10 19a2 2 0 0 0 4 0" />
+        </svg>
+        Enable push notifications
+      </button>
     );
   }
   if (state === "needs-install") {

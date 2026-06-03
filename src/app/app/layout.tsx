@@ -1,6 +1,7 @@
 import { requireApproved } from "@/lib/auth/gates";
 import { BottomNav } from "@/components/nav/BottomNav";
 import { PushReceiver } from "@/components/push/PushReceiver";
+import { NativePushRegistrar } from "@/components/push/NativePushRegistrar";
 import { DisclaimerGate } from "@/components/account/DisclaimerGate";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* In-app push banner — shows when a push arrives while the user is
           actively in the app (iOS suppresses system banners in foreground). */}
       <PushReceiver />
+      {/* Native (Capacitor) push registrar — asks for permission and
+          stores the APNs/FCM device token. No-op on plain web. */}
+      <NativePushRegistrar />
       {/* main has NO horizontal padding so pages can fully control their own
           inset (and use full width for sticky headers / hero cards). Pages
           should add px-4 or px-5 to their content as needed. */}
