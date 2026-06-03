@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 
 type Kind = "group" | "meetup" | "hobby";
@@ -43,11 +44,15 @@ const OPTIONS: KindOption[] = [
 
 /**
  * Three-way picker for the group's color-coded "kind" — Group, Meet-up,
- * or Hobby. Mirrors the filter pills on /app/groups so admins see the
- * same vocabulary at create time.
+ * or Hobby. Group + Hobby are long-lived rooms (created here via the
+ * generic Group form). Meet-up is a scheduled one-off — picking it
+ * jumps to /app/meetups/new where the form asks for when + where, since
+ * meet-ups live in a different table and have different fields than
+ * the room-style groups.
  */
 export function GroupKindPicker({ defaultValue = "group" }: { defaultValue?: Kind }) {
   const [kind, setKind] = useState<Kind>(defaultValue);
+  const router = useRouter();
   return (
     <div>
       <div className="text-[10.5px] uppercase tracking-[0.22em] text-ink-400 mb-1.5">
@@ -61,7 +66,16 @@ export function GroupKindPicker({ defaultValue = "group" }: { defaultValue?: Kin
             <button
               key={opt.id}
               type="button"
-              onClick={() => setKind(opt.id)}
+              onClick={() => {
+                if (opt.id === "meetup") {
+                  // Meet-ups live in a different model — punt to the
+                  // dedicated form so the user picks a date, time, and
+                  // location instead of filling out Name + Category.
+                  router.push("/app/meetups/new");
+                  return;
+                }
+                setKind(opt.id);
+              }}
               className={cn(
                 "rounded-2xl px-2.5 py-2.5 text-left ring-1 transition-colors",
                 active

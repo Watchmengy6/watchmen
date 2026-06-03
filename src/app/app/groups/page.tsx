@@ -105,11 +105,11 @@ export default async function GroupsPage({
             New
           </Link>
         </div>
-        {/* Chip row goes full-bleed (-mx-4 cancels the parent's px-4)
-            with its own px-4 so the first/last chip don't kiss the edge.
+        {/* Chip row: own px-4 to inset from screen edges (the sticky
+            parent has no horizontal padding so pages can control it).
             scrollbar-none + the WKWebView indicator lock kills the
             scroll indicator that read as "this is a webpage" earlier. */}
-        <div className="-mx-4 px-4 pb-2 flex gap-1.5 overflow-x-auto scrollbar-none">
+        <div className="px-4 pb-2 flex gap-1 overflow-x-auto scrollbar-none">
           <FilterPill href="/app/groups?tab=all" label="All" count={(allGroups ?? []).length} active={tab === "all"} />
           <FilterPill href="/app/groups?tab=group" label="Groups" count={kindCounts.group} active={tab === "group"} accent="gold" />
           <FilterPill href="/app/groups?tab=meetup" label="Meet-ups" count={kindCounts.meetup} active={tab === "meetup"} accent="emerald" />
@@ -213,8 +213,8 @@ function FilterPill({
       href={href}
       className={
         active
-          ? `shrink-0 h-8 px-3 rounded-full bg-white text-black font-semibold text-[12.5px] inline-flex items-center gap-1.5 ring-1 ${accentRing}`
-          : `shrink-0 h-8 px-3 rounded-full bg-ink-800 hairline text-ink-200 text-[12.5px] inline-flex items-center gap-1.5 ring-1 ${accentRing}`
+          ? `shrink-0 h-8 px-2.5 rounded-full bg-white text-black font-semibold text-[12px] inline-flex items-center gap-1 ring-1 ${accentRing}`
+          : `shrink-0 h-8 px-2.5 rounded-full bg-ink-800 hairline text-ink-200 text-[12px] inline-flex items-center gap-1 ring-1 ${accentRing}`
       }
     >
       {label}
