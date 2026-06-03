@@ -4,6 +4,11 @@ const config: CapacitorConfig = {
   appId: 'me.gy6.watchmen',
   appName: 'Watchmen GY6',
   webDir: 'out',
+  // Without this the WebView paints a flash of white between the iOS
+  // launch storyboard disappearing and the first frame of the page
+  // rendering. Black matches the launch screen + app theme so the
+  // transition reads as one continuous boot.
+  backgroundColor: '#0a0a0b',
   server: {
     url: 'https://watchmen-six.vercel.app',
     cleartext: false,
@@ -15,6 +20,7 @@ const config: CapacitorConfig = {
     // second layer of inset on top of the CSS padding, producing the
     // chunky black gap between the status bar and the page header.
     contentInset: 'never',
+    backgroundColor: '#0a0a0b',
   },
 };
 
