@@ -113,10 +113,11 @@ export default async function HomePage() {
   // loaded on demand by FeedPost when a brother expands a post (see
   // loadPostCommentsAction). This keeps /app/home from scaling with
   // total comment volume.
+  // home_feed_stats derives the viewer from current_profile_id()
+  // internally now (was caller-supplied) — see migration 00033.
   const { data: statsRows } = postIds.length
     ? await supabase.rpc("home_feed_stats", {
         p_post_ids: postIds,
-        p_viewer_id: profile.id,
       })
     : { data: [] };
 

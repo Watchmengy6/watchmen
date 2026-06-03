@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { searchMembersForMention, loadPostCommentsAction } from "@/lib/feed/actions";
+import { listMentionableMembers, loadPostCommentsAction } from "@/lib/feed/actions";
 import { isBirthdayToday } from "@/lib/utils/birthday";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -137,44 +137,59 @@ export function FeedPost({
     });
   }
 
-  // @ mention picker for comment input. Uses the static list when one is
-  // provided (preview mode), otherwise debounces a search action so the
-  // home page doesn't need to ship the full directory just for this.
+  // @ mention picker for comment input. Mirrors the composer's
+  // load-once pattern: the first time the user types `@` we fetch all
+  // approved members in one round-trip and filter locally on either
+  // username or full name. The previous per-keystroke search action
+  // only matched username.startsWith — useless when typing first
+  // names — and added 120ms+ network latency per character.
   const mentionQuery = (() => {
     const m = draft.match(/@([\w-]*)$/);
     return m ? m[1] : null;
   })();
 
-  const [remoteMatches, setRemoteMatches] = useState<
+  const [loadedPeople, setLoadedPeople] = useState<
     { id: string; full_name: string; username: string }[]
   >([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
   useEffect(() => {
+    // Only load when the picker is actually being asked for (user
+    // typed @), no static list was passed (preview/static contexts),
+    // and we haven't already loaded this mount.
+    if (mentionQuery === null) return;
     if (mentionablePeople.length > 0) return;
-    if (mentionQuery === null || mentionQuery.length === 0) {
-      setRemoteMatches([]);
-      return;
-    }
+    if (peopleLoaded) return;
     let cancelled = false;
-    const handle = window.setTimeout(async () => {
-      const rows = await searchMembersForMention(mentionQuery);
-      if (!cancelled) setRemoteMatches(rows);
-    }, 120);
+    (async () => {
+      const rows = await listMentionableMembers();
+      if (!cancelled) {
+        setLoadedPeople(rows);
+        setPeopleLoaded(true);
+      }
+    })();
     return () => {
       cancelled = true;
-      window.clearTimeout(handle);
     };
-  }, [mentionQuery, mentionablePeople.length]);
+  }, [mentionQuery, mentionablePeople.length, peopleLoaded]);
+
+  const allCommentMentionable =
+    mentionablePeople.length > 0 ? mentionablePeople : loadedPeople;
 
   const mentionMatches =
     mentionQuery === null
       ? []
-      : mentionablePeople.length > 0
-        ? mentionablePeople
-            .filter((u) =>
-              u.username?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
-            )
-            .slice(0, 5)
-        : remoteMatches.slice(0, 5);
+      : (() => {
+          const q = mentionQuery.toLowerCase();
+          return allCommentMentionable
+            .filter((u) => {
+              if (q === "") return true; // bare "@" — show suggestions
+              return (
+                u.username?.toLowerCase().includes(q) ||
+                u.full_name?.toLowerCase().includes(q)
+              );
+            })
+            .slice(0, 5);
+        })();
 
   function insertCommentMention(username: string) {
     const next = draft.replace(/@([\w-]*)$/, `@${username} `);
