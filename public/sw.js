@@ -11,7 +11,7 @@
 //     RSC payload when the network is healthy.
 //   - Supabase API / push / auth → never cached.
 
-const CACHE_VERSION = "watchmen-v3";
+const CACHE_VERSION = "watchmen-v4";
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
@@ -135,8 +135,8 @@ self.addEventListener("push", (event) => {
   const targetUrl = payload.url || "/app/home";
   const options = {
     body: payload.body || "",
-    icon: "/icon.svg",
-    badge: "/icon.svg",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     tag: payload.tag || undefined,
     renotify: !!payload.renotify,
     data: { url: targetUrl },
