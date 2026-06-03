@@ -22,6 +22,7 @@ type State =
   | "checking"
   | "unsupported"
   | "needs-install"
+  | "native-pending"
   | "denied"
   | "off"
   | "on"
@@ -35,6 +36,14 @@ export function EnablePushButton() {
     (async () => {
       // Feature checks.
       if (typeof window === "undefined") return;
+      // Capacitor wrap: web push is irrelevant here — iOS will use APNs
+      // via the @capacitor/push-notifications plugin once it's wired.
+      // Until then show a native-only message instead of the misleading
+      // "this browser doesn't support push" copy.
+      if ((window as any).Capacitor?.isNativePlatform?.()) {
+        setState("native-pending");
+        return;
+      }
       const supported =
         "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
       if (!supported) {
@@ -141,6 +150,13 @@ export function EnablePushButton() {
     return (
       <div className="rounded-xl bg-ink-800 hairline p-3 text-[13px] text-ink-300 leading-relaxed">
         This browser doesn&apos;t support push notifications. Try Chrome on Android or Safari (added to Home Screen) on iPhone.
+      </div>
+    );
+  }
+  if (state === "native-pending") {
+    return (
+      <div className="rounded-xl bg-ink-800 hairline p-3 text-[13px] text-ink-200 leading-relaxed">
+        Push notifications for the iOS app are coming in the next update. In the meantime, the brotherhood will reach you here whenever you open the app.
       </div>
     );
   }

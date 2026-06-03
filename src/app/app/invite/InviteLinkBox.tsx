@@ -51,8 +51,12 @@ export function InviteLinkBox({ link }: { link: string }) {
             value={link}
             onFocus={(e) => e.currentTarget.select()}
             onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-            className="w-full bg-transparent font-mono text-sm text-gold-200 break-all outline-none select-text"
-            style={{ WebkitUserSelect: "text", userSelect: "text" }}
+            className="block w-full max-w-full bg-transparent font-mono text-sm text-gold-200 outline-none select-text"
+            // minWidth:0 lets the input shrink below its intrinsic
+            // content size; without it iOS WebKit refuses to wrap a
+            // long URL and the parent ends up wider than the screen,
+            // which lets the user rubber-band the whole app sideways.
+            style={{ WebkitUserSelect: "text", userSelect: "text", minWidth: 0 }}
           />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">

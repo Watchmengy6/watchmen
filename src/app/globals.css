@@ -22,6 +22,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  /* Belt + suspenders: the app layout div is already overflow-x-hidden,
+     but on iOS WebView (Capacitor) a long unbroken string inside an
+     <input> can rubber-band the document horizontally. Lock it here so
+     the app never slides left/right like a webpage. */
+  overflow-x: hidden;
+  width: 100%;
 }
 
 * {
