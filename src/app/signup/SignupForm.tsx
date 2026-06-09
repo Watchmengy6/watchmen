@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
@@ -90,7 +91,17 @@ export function SignupForm({ inviteCode }: { inviteCode: string }) {
       {/* Explicit Terms + Privacy acceptance at signup. Apple App Store
           review (Guideline 1.2 / 5.1.1) expects a clear consent moment
           for UGC apps; the in-app disclaimer gate also re-confirms,
-          but this is the moment of contract formation. */}
+          but this is the moment of contract formation.
+
+          IMPORTANT: legal links use Next <Link> (no target=_blank) so
+          they navigate IN-APP instead of opening Safari. Apple Review
+          (June 9 2026) flagged "user taken to default web browser to
+          sign in or register" partly because these anchors were
+          escaping the WKWebView during onboarding. The agreedTerms
+          name is also submitted with the form so the server action can
+          enforce acceptance — we no longer trust the client-only
+          checkbox. */}
+      <input type="hidden" name="agreed_terms" value={agreedTerms ? "1" : ""} />
       <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
         <input
           type="checkbox"
@@ -100,23 +111,13 @@ export function SignupForm({ inviteCode }: { inviteCode: string }) {
         />
         <span className="text-ink-200 text-[12.5px] leading-snug">
           I&apos;m 18 or older and I agree to the{" "}
-          <a
-            href="/legal/terms"
-            target="_blank"
-            rel="noopener"
-            className="underline text-gold-300"
-          >
+          <Link href="/legal/terms" className="underline text-gold-300">
             Terms of Service
-          </a>{" "}
+          </Link>{" "}
           and{" "}
-          <a
-            href="/legal/privacy"
-            target="_blank"
-            rel="noopener"
-            className="underline text-gold-300"
-          >
+          <Link href="/legal/privacy" className="underline text-gold-300">
             Privacy Policy
-          </a>
+          </Link>
           . I understand The Watchmen is a private community and what&apos;s
           shared here stays here.
         </span>

@@ -64,9 +64,12 @@ export default function PrivacyPolicyPage() {
               </li>
               <li>
                 <strong>Push subscription tokens:</strong> if you enable
-                notifications, your browser provides a token we use to
-                send pushes. We delete the token if you turn notifications
-                off or delete your account.
+                notifications, your device or browser provides a push
+                token (an Apple APNs device token on the iOS app, a
+                Web Push subscription on browsers, and an FCM token on
+                Android) that we use to deliver notifications. We delete
+                the token if you turn notifications off or delete your
+                account.
               </li>
               <li>
                 <strong>Operational metadata:</strong> account creation

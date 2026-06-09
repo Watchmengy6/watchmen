@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { acceptDisclaimerAction } from "@/lib/account/disclaimer";
 
@@ -99,23 +100,17 @@ export function DisclaimerGate({ videoUrl }: { videoUrl?: string }) {
             I&apos;ve read the code of conduct and I&apos;ll uphold it. I
             understand I can lose access if I don&apos;t. I&apos;ve also
             read and agree to the{" "}
-            <a
-              href="/legal/terms"
-              target="_blank"
-              rel="noopener"
-              className="underline text-gold-300"
-            >
+            {/* In-app navigation only — never target="_blank". On iOS the
+                native WKWebView will open _blank links in Safari, which
+                Apple Review treats as "the user is taken out of the app
+                to sign in or register" and rejects under Guideline 4. */}
+            <Link href="/legal/terms" className="underline text-gold-300">
               Terms of Service
-            </a>{" "}
+            </Link>{" "}
             and{" "}
-            <a
-              href="/legal/privacy"
-              target="_blank"
-              rel="noopener"
-              className="underline text-gold-300"
-            >
+            <Link href="/legal/privacy" className="underline text-gold-300">
               Privacy Policy
-            </a>
+            </Link>
             .
           </span>
         </label>

@@ -2,6 +2,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import Link from "next/link";
+import { WebOnly } from "@/components/util/WebOnly";
 
 export const dynamic = "force-dynamic";
 
@@ -100,9 +101,11 @@ export default async function AdminHome() {
                   </div>
                 ))}
             </div>
-            <div className="text-ink-400 text-[11.5px] mt-2">
-              On iPhone, the app has to be installed to Home Screen first.
-            </div>
+            <WebOnly>
+              <div className="text-ink-400 text-[11.5px] mt-2">
+                On iPhone, the app has to be installed to Home Screen first.
+              </div>
+            </WebOnly>
           </CardBody>
         </Card>
       ) : null}

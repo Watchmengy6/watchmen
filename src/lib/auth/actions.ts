@@ -39,12 +39,24 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   const instagram_url = String(formData.get("instagram_url") ?? "").trim() || null;
   const bio = String(formData.get("bio") ?? "").trim() || null;
   const invite_code = String(formData.get("invite_code") ?? "").trim() || null;
+  // Terms acceptance is the moment of contract formation between the new
+  // member and The Watchmen. Apple App Store review (Guideline 5.1.1)
+  // expects a deliberate consent step before account creation — and a
+  // crafted client request must not be able to bypass it. The client
+  // checkbox submits "agreed_terms"=1; we reject any signup without it.
+  const agreed_terms = String(formData.get("agreed_terms") ?? "").trim();
 
   if (!email || !password || !full_name) {
     return { error: "Name, email, and password are required." };
   }
   if (password.length < 8) {
     return { error: "Password must be at least 8 characters." };
+  }
+  if (agreed_terms !== "1") {
+    return {
+      error:
+        "You must agree to the Terms of Service and Privacy Policy to create an account.",
+    };
   }
 
   const supabase = supabaseServer();

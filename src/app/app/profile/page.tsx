@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
 import { EnablePushButton } from "@/components/push/EnablePushButton";
 import { DeleteAccountButton } from "@/components/account/DeleteAccountButton";
+import { WebOnly } from "@/components/util/WebOnly";
 import { InviteLinkBox } from "@/app/app/invite/InviteLinkBox";
 
 export const dynamic = "force-dynamic";
@@ -158,7 +159,13 @@ export default async function ProfilePage() {
         </div>
         <EnablePushButton />
         <p className="text-[11.5px] text-ink-400 leading-relaxed">
-          Get a push when someone DMs you, posts an event, or @mentions you. On iPhone, install the app to your Home Screen first.
+          Get a push when someone DMs you, posts an event, or @mentions you.
+          {/* "Install to Home Screen" only applies to the web/PWA path —
+              the native iOS app has push baked in. Hide that copy in the
+              Capacitor build so the app doesn't read as a website wrapper. */}
+          <WebOnly>
+            {" "}On iPhone, install the app to your Home Screen first.
+          </WebOnly>
         </p>
       </div>
 

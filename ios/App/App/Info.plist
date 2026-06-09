@@ -68,6 +68,14 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Watchmen needs permission to save your member card image to Photos when you tap the share or save action.</string>
 
+	<!-- The feed composer + message composer accept video/* uploads. When
+	     the user picks a video via the iOS camera/photo picker, iOS may
+	     require microphone permission too (since recorded video captures
+	     audio). Adding this string up front avoids a hard crash when a
+	     brother taps "record video" in the picker. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Watchmen needs microphone access only if you choose to record a video in the app so the recording can include audio. Existing videos and photos from your library do not use the microphone.</string>
+
 	<!-- Location is requested only when a brother taps "Check in" at a
 	     meet-up or event to verify they're at the venue. We never track
 	     location in the background. -->

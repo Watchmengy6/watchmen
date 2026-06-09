@@ -4,6 +4,7 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/brand/Logo";
 import { logoutAction } from "@/lib/auth/actions";
+import { WebOnly } from "@/components/util/WebOnly";
 
 export const dynamic = "force-dynamic";
 
@@ -54,9 +55,13 @@ export default async function PendingPage() {
           </form>
         </CardBody>
       </Card>
-      <p className="mt-6 text-ink-400 text-xs">
-        Tap <span className="text-ink-200">Share → Add to Home Screen</span> in Safari to install the app.
-      </p>
+      {/* Only show the PWA install hint on web — native iOS users are
+          already inside the installed app. */}
+      <WebOnly>
+        <p className="mt-6 text-ink-400 text-xs">
+          Tap <span className="text-ink-200">Share → Add to Home Screen</span> in Safari to install the app.
+        </p>
+      </WebOnly>
     </main>
   );
 }
