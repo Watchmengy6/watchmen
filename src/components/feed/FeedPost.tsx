@@ -375,7 +375,7 @@ export function FeedPost({
             alt=""
             loading="lazy"
             decoding="async"
-            className="mt-3 w-full max-h-[420px] object-cover"
+            className="mt-3 block w-full max-w-full max-h-[420px] object-cover"
           />
         ) : (
           <div className="mt-3 h-px" />

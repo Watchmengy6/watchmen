@@ -41,6 +41,25 @@ input, textarea, select {
   font-size: 16px; /* prevent iOS zoom */
 }
 
+/* Defensive: every image / video / canvas is capped at its parent's
+   width. Without this, an oversized image can momentarily render at
+   its intrinsic width during hydration or optimistic UI inserts (right
+   after a brother posts a new photo, for example), which on iOS WebView
+   causes the whole document to scroll horizontally and pushes the
+   bottom nav offscreen until the app is fully restarted. Tailwind h-*
+   and w-* utilities still override these on elements that opt in. */
+img, video, canvas {
+  max-width: 100%;
+}
+
+/* Hard guard: the body and the next-root must never scroll horizontally
+   no matter what a child does. Belt + suspenders for the AppDelegate
+   bounce lock and the per-route overflow-x rules. */
+#__next, body, html {
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
 ::-webkit-scrollbar { width: 0; height: 0; }
 
 /* Tailwind doesn't ship `scrollbar-none` out of the box; we use the class
