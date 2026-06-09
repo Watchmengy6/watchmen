@@ -4,7 +4,12 @@ import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { loginAction } from "@/lib/auth/actions";
-import { SignInWithAppleButton } from "@/components/auth/SignInWithAppleButton";
+// Sign in with Apple was removed for v1.0: Apple's review (June 9 2026)
+// rejected the build because the OAuth flow opened in Safari, which
+// they treat as "taking the user out of the app to sign in." Guideline
+// 4.8 only requires SIWA when you also offer third-party social sign-in
+// (Google, Facebook, etc.) — email-only is fine without it. We can wire
+// real native SIWA via @capacitor-community/apple-sign-in in v1.1.
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -45,20 +50,6 @@ export function LoginForm() {
         </div>
       ) : null}
       <SubmitButton />
-
-      {/* Apple Sign In — App Store requires this alongside email auth.
-          The provider has to be enabled in Supabase dashboard before
-          the button actually works in production. */}
-      <div className="relative pt-3">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/[0.08]" />
-          <div className="text-[11px] uppercase tracking-[0.22em] text-ink-400">
-            or
-          </div>
-          <div className="flex-1 h-px bg-white/[0.08]" />
-        </div>
-      </div>
-      <SignInWithAppleButton />
     </form>
   );
 }

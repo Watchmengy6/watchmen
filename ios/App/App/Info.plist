@@ -53,5 +53,25 @@
 	     to skip the prompt on every TestFlight + App Store upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+
+	<!-- Required by iOS for any app that touches the camera or photo
+	     library. Even if the user never grants permission, iOS hard-
+	     crashes the app on first request if these keys are missing.
+	     Apple Review (June 9 2026) rejected the app because tapping
+	     the photo upload control on iPad crashed before the permission
+	     prompt could appear. These strings are surfaced to the user in
+	     the iOS permission dialog. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Watchmen uses your camera so you can take a photo or video to share with the brotherhood — for example, posting an update on the feed, attaching a photo to a message, or capturing a profile picture.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Watchmen reads photos from your library when you choose to attach one to a post, message, group banner, or your profile photo. Only the photos you explicitly select are shared.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Watchmen needs permission to save your member card image to Photos when you tap the share or save action.</string>
+
+	<!-- Location is requested only when a brother taps "Check in" at a
+	     meet-up or event to verify they're at the venue. We never track
+	     location in the background. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Watchmen uses your location only when you tap "Check in" at a meet-up or event to confirm you're at the venue. Location is not tracked in the background.</string>
 </dict>
 </plist>
