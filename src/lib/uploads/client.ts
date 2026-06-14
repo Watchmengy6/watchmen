@@ -87,13 +87,13 @@ export async function uploadMedia(file: File): Promise<
   const isVideo = file.type.startsWith("video/");
   if (!isImage && !isVideo) return { error: "Only images and videos allowed." };
 
-  // Videos: cap at 25 MB. Real transcoding belongs on a backend
+  // Videos: cap at 100 MB. Real transcoding belongs on a backend
   // service (Mux, Cloudflare Stream) — too expensive to do reliably
   // in-browser. The cap keeps phone recordings sane until then.
-  if (isVideo && file.size > 25 * 1024 * 1024) {
+  if (isVideo && file.size > 100 * 1024 * 1024) {
     return {
       error:
-        "Video is too big (25 MB max). Trim it shorter or record at lower quality.",
+        "Video is too big (100 MB max). Trim it shorter or record at lower quality.",
     };
   }
   // Images: 50 MB ceiling on the source file before resize.

@@ -41,7 +41,7 @@ export function GroupCoverInput() {
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp"
         className="hidden"
         onChange={onPick}
       />

@@ -57,7 +57,7 @@ export default function WelcomePhoto() {
         >
           <input
             type="file"
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp"
             className="hidden"
             onChange={() => setUploaded(true)}
           />

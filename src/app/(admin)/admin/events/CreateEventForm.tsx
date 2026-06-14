@@ -112,7 +112,7 @@ export function CreateEventForm() {
       <div>
         <Label>Cover image</Label>
         <label className="inline-flex items-center h-10 px-3 rounded-full bg-ink-800 hairline text-sm cursor-pointer">
-          <input type="file" accept="image/*" className="hidden" onChange={onPick} />
+          <input type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp" className="hidden" onChange={onPick} />
           {uploading ? "Uploading…" : imageUrl ? "Replace image" : "Upload image"}
         </label>
         {imageUrl ? (

@@ -398,7 +398,7 @@ export function ThreadChatClient({
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,video/*"
+          accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp,.mp4,.mov,.m4v"
           className="hidden"
           onChange={pickAndSendMedia}
         />
