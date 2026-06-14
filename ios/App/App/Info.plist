@@ -54,15 +54,17 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
-	<!-- v1.0 ships photo-library-only. We do NOT declare NSCameraUsageDescription
-	     or NSMicrophoneUsageDescription on purpose: the iOS camera path
-	     crashed Apple Review (June 9 2026) so the app now uses
-	     @capacitor/camera's pickImages() exclusively, which goes straight
-	     to the system photo library (no camera, no mic). Declaring camera
-	     permission without using it would also get flagged by Apple Review
-	     as a misleading permission request.
-	     NSPhotoLibraryUsageDescription is the only library-access string
-	     required for pickImages(). NSPhotoLibraryAddUsageDescription is
+	<!-- v1.0: NSCameraUsageDescription and NSMicrophoneUsageDescription are
+	     intentionally omitted. The app uses plain HTML <input type="file"
+	     accept="image/*,video/*"> elements for media upload. iOS WebKit's
+	     file-input action sheet conditionally shows "Take Photo or Video"
+	     ONLY when NSCameraUsageDescription is declared in Info.plist;
+	     without that key, the sheet collapses to just "Photo Library" and
+	     "Browse" — both of which are crash-safe paths. This is the fix
+	     for Apple Review's June 9 2026 rejection (iPad camera crash on
+	     the photo upload control).
+	     NSPhotoLibraryUsageDescription is kept because legacy iOS versions
+	     prompt on library access; NSPhotoLibraryAddUsageDescription is
 	     used by the digital-member-card "Save to Photos" action. -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Watchmen reads photos from your library when you choose to attach one to a post, message, group banner, or your profile photo. Only the photos you explicitly select are shared.</string>

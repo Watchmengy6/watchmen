@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { sendMessageAction } from "@/lib/chat/actions";
 import { useToast } from "@/components/ui/Toast";
 import { PollCreator } from "@/components/polls/PollCreator";
-import { pickMediaFromLibrary } from "@/lib/upload/pickPhoto";
 
 export function MessageInput({
   chatId,
@@ -20,6 +19,7 @@ export function MessageInput({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const { push } = useToast();
 
   async function send() {
@@ -33,23 +33,19 @@ export function MessageInput({
     setBusy(false);
   }
 
-  // Library-only media picker — photo OR video, never the camera.
-  // The iOS camera path crashed Apple Review June 2026; pickMediaFromLibrary
-  // routes through PHPickerViewController which has no camera entry point.
-  async function onPickMedia() {
-    if (busy) return;
-    const picked = await pickMediaFromLibrary();
-    if (!picked) return;
-    if (picked.file.size > 50 * 1024 * 1024) {
+  async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
       push({ title: "Too large", body: "Max 50 MB.", variant: "error" });
       return;
     }
     setBusy(true);
     const supabase = supabaseBrowser();
-    const ext = picked.file.name.split(".").pop() || (picked.mediaType === "video" ? "mov" : "jpg");
+    const ext = file.name.split(".").pop() || "bin";
     const path = `${authUserId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("chat-media").upload(path, picked.file, {
-      contentType: picked.file.type,
+    const { error } = await supabase.storage.from("chat-media").upload(path, file, {
+      contentType: file.type,
       upsert: false,
     });
     if (error) {
@@ -58,15 +54,16 @@ export function MessageInput({
       return;
     }
     const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+    const mediaType = file.type.startsWith("video") ? "video" : "image";
     const sendRes = await sendMessageAction({
       chat_id: chatId,
       content: text.trim(),
       media_url: pub.publicUrl,
-      media_type: picked.mediaType,
+      media_type: mediaType,
     });
     if ((sendRes as any)?.error) {
-      // Surface the failure and try to clean up the orphan upload so
-      // it doesn't sit in storage forever.
+      // Surface the failure and try to clean up the orphan upload so it
+      // doesn't sit in storage forever.
       push({
         title: "Couldn't send",
         body: (sendRes as any).error,
@@ -82,6 +79,7 @@ export function MessageInput({
     }
     setText("");
     setBusy(false);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   return (
@@ -91,15 +89,16 @@ export function MessageInput({
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
         <div className="flex items-end gap-2">
-          <button
-            type="button"
-            aria-label="Add photo or video"
-            onClick={onPickMedia}
-            disabled={busy}
-            className="shrink-0 h-10 w-10 rounded-full bg-ink-800 hairline flex items-center justify-center disabled:opacity-60"
-          >
+          <label className="shrink-0 h-10 w-10 rounded-full bg-ink-800 hairline flex items-center justify-center cursor-pointer">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,video/*"
+              onChange={onPickFile}
+              className="hidden"
+            />
             <span className="text-ink-200 text-xl leading-none">+</span>
-          </button>
+          </label>
           <button
             type="button"
             onClick={() => setPollOpen(true)}

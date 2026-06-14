@@ -12,9 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.0"),
-        .package(name: "CapacitorCamera", path: "../../../node_modules/@capacitor/camera"),
-        .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications"),
-        .package(name: "CapawesomeCapacitorFilePicker", path: "../../../node_modules/@capawesome/capacitor-file-picker")
+        .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications")
     ],
     targets: [
         .target(
@@ -22,9 +20,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
-                .product(name: "CapacitorCamera", package: "CapacitorCamera"),
-                .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications"),
-                .product(name: "CapawesomeCapacitorFilePicker", package: "CapawesomeCapacitorFilePicker")
+                .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications")
             ]
         )
     ]

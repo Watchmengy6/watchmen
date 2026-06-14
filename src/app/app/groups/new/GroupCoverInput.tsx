@@ -1,24 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { uploadMedia } from "@/lib/uploads/client";
-import { pickPhotoFromLibrary } from "@/lib/upload/pickPhoto";
 
 /**
  * Cover-image picker + uploader for a new group. Writes the resulting public
  * URL into a hidden input named `cover_url` so the server action picks it up.
- *
- * Uses pickPhotoFromLibrary so iOS never sees the "Take Photo" action sheet
- * (Apple Review June 2026 crashed on that path).
  */
 export function GroupCoverInput() {
   const [url, setUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  async function handleClick() {
-    if (uploading) return;
-    const file = await pickPhotoFromLibrary();
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setErr("Pick an image file.");
@@ -28,6 +24,7 @@ export function GroupCoverInput() {
     setUploading(true);
     const result = await uploadMedia(file);
     setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
     if ("error" in result) {
       setErr(result.error);
       return;
@@ -41,6 +38,13 @@ export function GroupCoverInput() {
         Cover image (optional)
       </div>
       <input type="hidden" name="cover_url" value={url ?? ""} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onPick}
+      />
       {url ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -61,7 +65,7 @@ export function GroupCoverInput() {
       ) : (
         <button
           type="button"
-          onClick={handleClick}
+          onClick={() => fileRef.current?.click()}
           disabled={uploading}
           className="w-full h-40 rounded-xl bg-ink-800 hairline flex flex-col items-center justify-center text-ink-300 active:bg-ink-700 transition-colors"
         >

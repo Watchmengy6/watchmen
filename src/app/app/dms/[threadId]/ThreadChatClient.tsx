@@ -6,7 +6,6 @@ import { sendThreadMessageAction } from "@/lib/dms/actions";
 import { loadOlderThreadMessagesAction } from "@/lib/dms/pagination";
 import { createBrowserClient } from "@supabase/ssr";
 import { uploadMedia } from "@/lib/uploads/client";
-import { pickMediaFromLibrary } from "@/lib/upload/pickPhoto";
 import { ReportButton } from "@/components/moderation/ReportButton";
 
 interface Msg {
@@ -49,6 +48,7 @@ export function ThreadChatClient({
   );
   const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   // FIFO queue of local-* ids that are waiting for their realtime echo.
   // When a realtime INSERT from me arrives, we shift the front of the queue
   // and replace that placeholder with the real row.
@@ -220,24 +220,21 @@ export function ThreadChatClient({
     });
   }
 
-  async function pickAndSendMedia() {
-    if (uploading) return;
-    // Library-only picker — photo OR video, no camera path. The iOS
-    // camera surface crashed Apple Review June 2026; pickMediaFromLibrary
-    // routes through PHPickerViewController which has no Take Photo/Video.
-    const picked = await pickMediaFromLibrary();
-    if (!picked) return;
+  async function pickAndSendMedia(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
     setUploading(true);
     setErr(null);
-    const result = await uploadMedia(picked.file);
+    const result = await uploadMedia(file);
     setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
     if ("error" in result) {
       setErr(result.error);
       return;
     }
     const localId = nextLocalId();
     pendingLocalIdsRef.current.push(localId);
-    const isImage = picked.mediaType === "image";
+    const isImage = result.mediaType === "image";
     // Human-readable preview (no internal placeholder tokens like "[image]").
     // The thread_messages -> threads.last_message_preview trigger copies the
     // body straight into the inbox list, so this is what brothers will see.
@@ -248,7 +245,7 @@ export function ThreadChatClient({
         id: localId,
         body: preview,
         media_url: result.url,
-        media_type: picked.mediaType,
+        media_type: result.mediaType,
         created_at: new Date().toISOString(),
         author_id: meId,
         author_name: meName,
@@ -260,7 +257,7 @@ export function ThreadChatClient({
     fd.set("thread_id", threadId);
     fd.set("body", preview);
     fd.set("media_url", result.url);
-    fd.set("media_type", picked.mediaType);
+    fd.set("media_type", result.mediaType);
     startTransition(async () => {
       const r = await sendThreadMessageAction(fd);
       if (r && r.error) {
@@ -398,10 +395,17 @@ export function ThreadChatClient({
         {err ? (
           <div className="text-[12px] text-red-300 pb-1">{err}</div>
         ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={pickAndSendMedia}
+        />
         <div className="flex items-end gap-2">
           <button
             type="button"
-            onClick={pickAndSendMedia}
+            onClick={() => fileRef.current?.click()}
             disabled={uploading}
             aria-label="Send photo or video"
             className="h-9 w-9 shrink-0 rounded-full bg-ink-800 hairline text-ink-200 flex items-center justify-center"
