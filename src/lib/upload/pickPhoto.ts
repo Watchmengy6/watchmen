@@ -92,41 +92,82 @@ export async function pickMediaFromLibrary(): Promise<PickedMedia | null> {
 
   // Native path — @capawesome/capacitor-file-picker pickMedia opens
   // PHPickerViewController on iOS, which has zero camera entry points
-  // and supports both images and videos.
+  // and supports both images and videos. If that fails (plugin
+  // version mismatch, install glitch, etc.) we fall back to
+  // @capacitor/camera's pickImages so photo upload still works.
   if (cap?.isNativePlatform?.()) {
-    try {
-      const { FilePicker } = await import("@capawesome/capacitor-file-picker");
-      const result = await FilePicker.pickMedia({
-        limit: 1,
-        // readData: false → we fetch the blob ourselves from the
-        // file:// path. That's cheaper than base64 round-tripping
-        // for large videos.
-        readData: false,
-      });
-      const picked = result.files?.[0];
-      if (!picked) return null;
+    // Strategy 1: FilePicker.pickMedia (photo OR video from library).
+    const available =
+      typeof cap.isPluginAvailable === "function"
+        ? cap.isPluginAvailable("FilePicker")
+        : true;
+    if (available) {
+      try {
+        const { FilePicker } = await import(
+          "@capawesome/capacitor-file-picker"
+        );
+        const result = await FilePicker.pickMedia({
+          limit: 1,
+          // readData: false → we fetch the blob ourselves from the
+          // local path. Cheaper than base64 round-tripping for video.
+          readData: false,
+        });
+        const picked = result.files?.[0];
+        if (!picked) return null; // user cancelled — don't fall back
 
-      // Resolve the local URI Capacitor returned. iOS hands back
-      // either `path` (file://...) or `webPath` (capacitor://...).
-      const uri = (picked as any).webPath || (picked as any).path;
-      if (!uri) return null;
-
-      const res = await fetch(uri);
-      const blob = await res.blob();
-      const mime = picked.mimeType || blob.type || "application/octet-stream";
-      const isVideo = mime.startsWith("video/");
-      const ext = (() => {
-        if (picked.name && picked.name.includes(".")) {
-          return picked.name.split(".").pop()!.toLowerCase();
+        // The native iOS bridge returns `path` as a file:// URI.
+        // WKWebView fetch() can't read raw file:// URIs by default —
+        // Capacitor.convertFileSrc() rewrites them to a capacitor://
+        // URL that the local server can serve.
+        const rawPath = (picked as any).path || (picked as any).webPath;
+        if (!rawPath) {
+          console.warn("[pickMedia] FilePicker returned no path");
+          // Fall through to fallback strategy below.
+        } else {
+          const uri =
+            typeof cap.convertFileSrc === "function"
+              ? cap.convertFileSrc(rawPath)
+              : rawPath;
+          const res = await fetch(uri);
+          const blob = await res.blob();
+          const mime =
+            picked.mimeType || blob.type || "application/octet-stream";
+          const isVideo = mime.startsWith("video/");
+          const ext = (() => {
+            if (picked.name && picked.name.includes(".")) {
+              return picked.name.split(".").pop()!.toLowerCase();
+            }
+            if (isVideo) return mime.split("/")[1] || "mov";
+            return mime.split("/")[1] || "jpg";
+          })();
+          const filename = picked.name || `media-${Date.now()}.${ext}`;
+          const file = new File([blob], filename, { type: mime });
+          return { file, mediaType: isVideo ? "video" : "image" };
         }
-        if (isVideo) return mime.split("/")[1] || "mov";
-        return mime.split("/")[1] || "jpg";
-      })();
-      const filename = picked.name || `media-${Date.now()}.${ext}`;
-      const file = new File([blob], filename, { type: mime });
-      return { file, mediaType: isVideo ? "video" : "image" };
+      } catch (e) {
+        console.warn(
+          "[pickMedia] FilePicker.pickMedia failed, falling back to photo-only picker",
+          e,
+        );
+        // Fall through to Strategy 2 — at minimum photos should still
+        // work for the user even if the file picker plugin is broken.
+      }
+    } else {
+      console.warn(
+        "[pickMedia] FilePicker plugin not available — using photo-only fallback",
+      );
+    }
+
+    // Strategy 2: @capacitor/camera Camera.pickImages — image only.
+    // This is the same plugin pickPhotoFromLibrary uses, which we know
+    // works on Aaron's device. Video gets skipped on the fallback but
+    // photo upload is preserved end-to-end.
+    try {
+      const photo = await pickPhotoFromLibrary();
+      if (!photo) return null;
+      return { file: photo, mediaType: "image" };
     } catch (e) {
-      console.warn("[pickMedia] Capacitor pickMedia failed", e);
+      console.warn("[pickMedia] photo fallback also failed", e);
       return null;
     }
   }
