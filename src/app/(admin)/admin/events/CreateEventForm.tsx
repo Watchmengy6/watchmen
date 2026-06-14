@@ -7,6 +7,7 @@ import { Input, Label, Textarea } from "@/components/ui/Input";
 import { createEventAction } from "@/lib/events/actions";
 import { useToast } from "@/components/ui/Toast";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { pickPhotoFromLibrary } from "@/lib/upload/pickPhoto";
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -28,8 +29,9 @@ export function CreateEventForm() {
     if (state?.error) push({ title: "Failed", body: state.error, variant: "error" });
   }, [state, push]);
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleClick() {
+    if (uploading) return;
+    const file = await pickPhotoFromLibrary();
     if (!file) return;
     setUploading(true);
     const supabase = supabaseBrowser();
@@ -111,10 +113,14 @@ export function CreateEventForm() {
       </div>
       <div>
         <Label>Cover image</Label>
-        <label className="inline-flex items-center h-10 px-3 rounded-full bg-ink-800 hairline text-sm cursor-pointer">
-          <input type="file" accept="image/*" className="hidden" onChange={onPick} />
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={uploading}
+          className="inline-flex items-center h-10 px-3 rounded-full bg-ink-800 hairline text-sm cursor-pointer disabled:opacity-60"
+        >
           {uploading ? "Uploading…" : imageUrl ? "Replace image" : "Upload image"}
-        </label>
+        </button>
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt="" className="mt-2 rounded-xl h-28 w-full object-cover" />

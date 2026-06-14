@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils/cn";
+import { pickPhotoFromLibrary } from "@/lib/upload/pickPhoto";
 
 export function AvatarUpload({
   authUserId,
@@ -19,8 +20,9 @@ export function AvatarUpload({
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleClick() {
+    if (busy) return;
+    const file = await pickPhotoFromLibrary();
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
       push({ title: "Image too large", body: "Max 8 MB.", variant: "error" });
@@ -49,16 +51,24 @@ export function AvatarUpload({
       <Avatar src={url} name={name} size={80} ring />
       <div className="flex flex-col gap-2">
         <input type="hidden" name="profile_photo_url" value={url ?? ""} />
-        <label
+        {/* Library-only photo picker. The old <input type="file"> opened
+            iOS's 3-option sheet ("Take Photo" / "Photo Library" / "Browse")
+            and the "Take Photo" path crashed the app on iPadOS 26.5
+            under Capacitor 8 — Apple Review caught it in June 2026.
+            pickPhotoFromLibrary uses @capacitor/camera's pickImages on
+            native (library only, no camera) and falls back to a hidden
+            input on web. */}
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={busy}
           className={cn(
             "inline-flex items-center justify-center h-9 px-3 rounded-full text-sm cursor-pointer select-none",
-            "bg-transparent text-white hairline hover:bg-white/[0.04] active:bg-white/[0.08] transition-colors",
-            busy && "opacity-60 pointer-events-none",
+            "bg-transparent text-white hairline hover:bg-white/[0.04] active:bg-white/[0.08] transition-colors disabled:opacity-60",
           )}
         >
-          <input type="file" accept="image/*" className="hidden" onChange={onPick} />
           {busy ? "Uploading…" : url ? "Change photo" : "Upload photo"}
-        </label>
+        </button>
         {url ? (
           <button
             type="button"

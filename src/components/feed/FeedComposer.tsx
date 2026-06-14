@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { uploadMedia } from "@/lib/uploads/client";
 import { listMentionableMembers } from "@/lib/feed/actions";
+import { pickMediaFromLibrary } from "@/lib/upload/pickPhoto";
 
 // Meetup composer type removed per Dustin — informal coordination
 // happens via plain posts now, not a dedicated meetup type. The
@@ -78,7 +79,6 @@ export function FeedComposer({
     ? taggableGroups.find((g) => g.id === taggedGroupId)
     : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // @ mention picker state. `mentionQuery` is the text typed after the "@"
   // immediately before the CARET (null = no active @ token). We compute it
@@ -166,21 +166,23 @@ export function FeedComposer({
     setPollOptions(["", ""]);
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handlePickMedia() {
+    if (uploading) return;
+    // Library-only picker — opens PHPickerViewController on iOS, which
+    // has no camera path (the crash surface Apple Review caught in
+    // June 2026). Lets the user pick a photo OR video from their roll.
+    const picked = await pickMediaFromLibrary();
+    if (!picked) return;
     setUploading(true);
     setErr(null);
-    const result = await uploadMedia(file);
+    const result = await uploadMedia(picked.file);
     setUploading(false);
     if ("error" in result) {
       setErr(result.error);
       return;
     }
     setMediaUrl(result.url);
-    setMediaType(result.mediaType);
-    // Reset input so the same file can be picked again later.
-    if (fileRef.current) fileRef.current.value = "";
+    setMediaType(picked.mediaType);
   }
 
   function handlePost() {
@@ -216,7 +218,7 @@ export function FeedComposer({
     fd.set("body", type === "poll" ? pollQuestion.trim() : text.trim());
     fd.set("tagged_group_id", taggedGroupId ?? "");
     fd.set("media_url", mediaUrl ?? "");
-    fd.set("media_type", mediaType ?? "none");
+    fd.set("media_type", mediaUrl ? (mediaType ?? "image") : "none");
     if (type === "poll") {
       fd.set("poll_question", pollQuestion.trim());
       // FormData supports multiple values for the same key; the server
@@ -412,21 +414,23 @@ export function FeedComposer({
             <div className="mt-2 text-[12px] text-red-300">{err}</div>
           ) : null}
 
-          {/* Media preview */}
+          {/* Media preview — photo OR video. Both paths go through the
+              library-only picker (pickMediaFromLibrary), never the
+              camera, so we keep the v0.x preview branches intact. */}
           {mediaUrl ? (
             <div className="mt-2 relative">
-              {mediaType === "image" ? (
+              {mediaType === "video" ? (
+                <video
+                  src={mediaUrl}
+                  className="w-full max-h-72 rounded-xl"
+                  controls
+                />
+              ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={mediaUrl}
                   alt=""
                   className="w-full max-h-72 rounded-xl object-cover"
-                />
-              ) : (
-                <video
-                  src={mediaUrl}
-                  className="w-full max-h-72 rounded-xl"
-                  controls
                 />
               )}
               <button
@@ -443,19 +447,11 @@ export function FeedComposer({
             </div>
           ) : null}
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,video/*"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-
           <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
               aria-label="Add photo or video"
-              onClick={() => fileRef.current?.click()}
+              onClick={handlePickMedia}
               disabled={uploading}
               className={cn(
                 "h-9 w-9 rounded-full bg-ink-900/60 hairline flex items-center justify-center transition-colors",

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { WelcomeFrame } from "@/components/welcome/WelcomeFrame";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
+import { pickPhotoFromLibrary } from "@/lib/upload/pickPhoto";
 
 export default function WelcomePhoto() {
   const [uploaded, setUploaded] = useState(false);
@@ -47,7 +48,15 @@ export default function WelcomePhoto() {
           ) : null}
         </div>
 
-        <label
+        <button
+          type="button"
+          onClick={async () => {
+            // Library-only picker — never opens the camera. This preview
+            // page is just a teaser and doesn't actually upload anything;
+            // if the user picks a photo we flip into the "uploaded" UI.
+            const file = await pickPhotoFromLibrary();
+            if (file) setUploaded(true);
+          }}
           className={cn(
             "mt-8 inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full cursor-pointer transition-colors",
             uploaded
@@ -55,12 +64,6 @@ export default function WelcomePhoto() {
               : "bg-gradient-to-b from-gold-300 to-gold-500 text-black font-semibold",
           )}
         >
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={() => setUploaded(true)}
-          />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
                strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -68,7 +71,7 @@ export default function WelcomePhoto() {
             <path d="M12 3v12" />
           </svg>
           {uploaded ? "Change photo" : "Upload from camera roll"}
-        </label>
+        </button>
 
         <div className="mt-3 text-[12px] text-ink-400">
           JPG or PNG · square works best
