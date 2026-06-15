@@ -83,6 +83,7 @@ private func applyLockToFirstWebView() -> Bool {
     sv.contentInsetAdjustmentBehavior = .never
     sv.showsVerticalScrollIndicator = false
     sv.showsHorizontalScrollIndicator = false
+    print("[AppDelegate] WebView lock applied via retry fallback")
     return true
 }
 
