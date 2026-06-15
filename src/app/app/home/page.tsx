@@ -87,7 +87,7 @@ export default async function HomePage() {
     supabase
       .from("posts")
       .select(
-        `id, kind, body, created_at, media_url, meetup_when_at, meetup_location,
+        `id, kind, body, created_at, media_url, media_type, meetup_when_at, meetup_location,
          poll_question, poll_options, pinned,
          author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company, birthday),
          tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
@@ -171,6 +171,7 @@ export default async function HomePage() {
       body: p.body,
       created_at: p.created_at,
       image_url: p.media_url ?? null,
+      media_type: (p.media_type as "image" | "video" | "none" | null) ?? null,
       pinned: !!p.pinned,
       // Member-meetup feed posts carry structured when/where so the
       // renderer can show a card without resolving a meetup entity.

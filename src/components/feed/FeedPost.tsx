@@ -61,6 +61,10 @@ export interface FeedPostShape {
   body: string;
   created_at: string;
   image_url?: string | null;
+  /** Discriminator that tells the renderer whether image_url points at a
+   *  still image or a video. Older rows may lack this and fall back to
+   *  "image" — that was the pre-video behaviour. */
+  media_type?: "image" | "video" | "none" | null;
   author: FeedPostAuthor;
   tagged_group?: FeedPostTaggedGroup | null;
   activity?: FeedPostActivity | null;
@@ -369,14 +373,31 @@ export function FeedPost({
         ) : null}
 
         {post.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.image_url}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="mt-3 block w-full max-w-full max-h-[420px] object-cover"
-          />
+          post.media_type === "video" ? (
+            // Native HTML video with full controls so the brother can
+            // scrub, mute, and unmute. `playsInline` keeps it embedded in
+            // the feed instead of taking over the screen on iOS Safari /
+            // WKWebView. NO `muted` attribute — without it, iOS still
+            // ships the volume button so brothers can hear the audio
+            // track. `preload=metadata` loads enough to show the poster
+            // frame without pulling the whole file down on scroll past.
+            <video
+              src={post.image_url}
+              controls
+              playsInline
+              preload="metadata"
+              className="mt-3 block w-full max-w-full max-h-[420px] bg-black"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.image_url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="mt-3 block w-full max-w-full max-h-[420px] object-cover"
+            />
+          )
         ) : (
           <div className="mt-3 h-px" />
         )}
