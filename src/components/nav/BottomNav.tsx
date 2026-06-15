@@ -31,11 +31,40 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
   // than visualViewport (which can fire spuriously on rotation/scroll).
   useEffect(() => {
     if (typeof document === "undefined") return;
+    // Helper: is this element a TEXT input that brings up the iOS keyboard?
+    // File / button / submit / checkbox / radio / range etc do NOT bring up
+    // a keyboard and shouldn't hide the nav. The old check fired on every
+    // <input>, which meant tapping "Add photo" (a hidden <input type=file>)
+    // immediately hid the nav AND failed to restore it cleanly when the
+    // iOS photo picker dismissed — that read as "bottom bar gets messed up
+    // when I upload a photo."
+    const KEYBOARD_INPUT_TYPES = new Set([
+      "text",
+      "search",
+      "url",
+      "tel",
+      "email",
+      "password",
+      "number",
+      "date",
+      "datetime-local",
+      "month",
+      "time",
+      "week",
+    ]);
+    function isKeyboardInput(el: HTMLElement | null): boolean {
+      if (!el) return false;
+      if (el.tagName === "TEXTAREA") return true;
+      if (el.isContentEditable) return true;
+      if (el.tagName === "INPUT") {
+        const t = (el as HTMLInputElement).type || "text";
+        return KEYBOARD_INPUT_TYPES.has(t);
+      }
+      return false;
+    }
+
     function onFocusIn(e: FocusEvent) {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const tag = target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
+      if (isKeyboardInput(e.target as HTMLElement | null)) {
         setInputFocused(true);
       }
     }
@@ -43,12 +72,7 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
       // Delay slightly — some pickers blur briefly between widgets.
       setTimeout(() => {
         const ae = document.activeElement as HTMLElement | null;
-        const stillTyping =
-          !!ae &&
-          (ae.tagName === "INPUT" ||
-            ae.tagName === "TEXTAREA" ||
-            ae.isContentEditable);
-        setInputFocused(stillTyping);
+        setInputFocused(isKeyboardInput(ae));
       }, 0);
     }
     document.addEventListener("focusin", onFocusIn);

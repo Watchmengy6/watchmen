@@ -412,15 +412,19 @@ export function FeedComposer({
             <div className="mt-2 text-[12px] text-red-300">{err}</div>
           ) : null}
 
-          {/* Media preview */}
+          {/* Media preview — wrapper has overflow-hidden so a portrait
+              photo or oversized HEIC from the camera can never push the
+              composer card past viewport width and let the whole page
+              rubber-band sideways after upload. block + max-w-full on
+              the media elements themselves are belt+suspenders. */}
           {mediaUrl ? (
-            <div className="mt-2 relative">
+            <div className="mt-2 relative overflow-hidden rounded-xl">
               {mediaType === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={mediaUrl}
                   alt=""
-                  className="w-full max-h-72 rounded-xl object-cover"
+                  className="block w-full max-w-full max-h-72 rounded-xl object-cover"
                 />
               ) : (
                 <video
