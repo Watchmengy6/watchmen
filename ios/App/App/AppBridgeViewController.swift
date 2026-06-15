@@ -24,6 +24,13 @@ class AppBridgeViewController: CAPBridgeViewController {
     /// Held for the lifetime of the VC so the clamp keeps running.
     private var scrollObservations: [NSKeyValueObservation] = []
 
+    /// Diagnostic counters so we can tell, from the Xcode console,
+    /// whether the KVO observers are actually firing during the
+    /// post-submit horizontal-pan bug. We cap each at a small number
+    /// so the console doesn't flood once a clamp engages.
+    private var sizeClampPrintsLeft = 5
+    private var offsetClampPrintsLeft = 5
+
     override func viewDidLoad() {
         super.viewDidLoad()
         lockWebViewScrollBehavior()
@@ -99,23 +106,41 @@ class AppBridgeViewController: CAPBridgeViewController {
         // Clamp content width to the viewport whenever WebKit measures
         // wider (e.g. a portrait photo / HEIC mid-decode, or a stray wide
         // element). `initial` runs it once immediately too.
-        let sizeObs = sv.observe(\.contentSize, options: [.initial, .new]) { scrollView, _ in
+        let sizeObs = sv.observe(\.contentSize, options: [.initial, .new]) { [weak self] scrollView, _ in
             guard scrollView.zoomScale <= 1.001 else { return }
             let w = scrollView.bounds.width
             guard w > 0, scrollView.contentSize.width > w + 0.5 else { return }
+            let oldWidth = scrollView.contentSize.width
             scrollView.contentSize = CGSize(
                 width: w,
                 height: scrollView.contentSize.height
             )
+            // Diagnostic: log up to 5 size clamp events. Tells us if WebKit
+            // is actually driving the content wider than the viewport
+            // (which would be the case if some DOM element has intrinsic
+            // width > viewport width post-reflow).
+            if let self = self, self.sizeClampPrintsLeft > 0 {
+                self.sizeClampPrintsLeft -= 1
+                print("[AppBridgeVC] size clamp fired — was=\(oldWidth) clamped to=\(w)")
+            }
         }
 
         // Snap any horizontal drift back to 0. Setting contentOffset.x = 0
         // here fires this observer again, but the guard makes that second
         // pass a no-op, so there is no feedback loop.
-        let offsetObs = sv.observe(\.contentOffset, options: [.new]) { scrollView, _ in
+        let offsetObs = sv.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
             guard scrollView.zoomScale <= 1.001 else { return }
             if scrollView.contentOffset.x != 0 {
+                let drift = scrollView.contentOffset.x
                 scrollView.contentOffset.x = 0
+                // Diagnostic: log up to 5 horizontal drift events. Tells us
+                // if iOS is actually delivering horizontal scroll events to
+                // the WKWebView's scrollView (which would be the case if
+                // the user's drag is engaging the scroll pan recognizer).
+                if let self = self, self.offsetClampPrintsLeft > 0 {
+                    self.offsetClampPrintsLeft -= 1
+                    print("[AppBridgeVC] offset drift snapped back — drift=\(drift)")
+                }
             }
         }
 
