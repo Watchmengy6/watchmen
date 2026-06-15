@@ -52,10 +52,14 @@ img, video, canvas {
   max-width: 100%;
 }
 
-/* Hard guard: the body and the next-root must never scroll horizontally
-   no matter what a child does. Belt + suspenders for the AppDelegate
-   bounce lock and the per-route overflow-x rules. */
-#__next, body, html {
+/* Hard guard: the document must never scroll horizontally no matter what
+   a child does. Belt + suspenders for the native WKWebView KVO clamp
+   (AppBridgeViewController) and the per-route overflow-x rules.
+   `overflow-x: clip` is the stronger primitive on iOS 16+; on iOS 15 it's
+   an unknown value so the cascade falls back to the `overflow-x: hidden`
+   set on html/body above. (No `#__next` here — this is the App Router,
+   which renders no such wrapper element; body/html are the real roots.) */
+body, html {
   max-width: 100vw;
   overflow-x: clip;
 }

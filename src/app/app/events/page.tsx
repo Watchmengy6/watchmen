@@ -28,16 +28,20 @@ export default async function EventsPage({
 
   // Pull what each tab needs. Events tab fetches the list. Calendar
   // pulls upcoming events + meetups + birthday profiles, then merges.
+  // Only the columns EventCard renders — dropping description/address/
+  // lat-lon/timestamps trims the JSON payload (and the bytes over the
+  // wire to the phone) without changing what's shown.
+  const EVENT_CARD_COLS = "id, title, event_date, start_time, location_name, image_url";
   const upRes = await supabase
     .from("events")
-    .select("*")
+    .select(EVENT_CARD_COLS)
     .gte("event_date", today)
     .eq("status", "published")
     .order("event_date", { ascending: true })
     .order("start_time", { ascending: true });
   const pastRes = await supabase
     .from("events")
-    .select("*")
+    .select(EVENT_CARD_COLS)
     .lt("event_date", today)
     .in("status", ["published", "completed"])
     .order("event_date", { ascending: false })
@@ -140,14 +144,11 @@ export default async function EventsPage({
     });
   }
 
-  // Count for the Events pill only. Calendar pill has no number —
-  // the grid itself is the view, so a count next to the label was
-  // misleading (it would say "1" even on months with zero items).
-  const { count: eventsCount } = await supabase
-    .from("events")
-    .select("*", { count: "exact", head: true })
-    .gte("event_date", today)
-    .eq("status", "published");
+  // Count for the Events pill. This is exactly the set we already
+  // fetched into `upcomingEvents` above (same status + date filter), so
+  // derive it from that instead of paying for a third identical round
+  // trip to Postgres on every page load.
+  const eventsCount = upcomingEvents.length;
 
   return (
     <div
