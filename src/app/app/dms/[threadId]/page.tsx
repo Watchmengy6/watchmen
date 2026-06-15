@@ -53,9 +53,12 @@ export default async function DmThreadPage({
     .limit(200);
   const messages = (messagesDesc ?? []).slice().reverse();
 
-  // Mark this thread as read before render so the inbox unread badge is
-  // reliably cleared when the user navigates back (single cheap row write).
-  await markThreadReadAction(thread.id).catch(() => {});
+  // Fire-and-forget the read marker so we don't block first paint of the
+  // thread on a write that the user doesn't see. The group/event chat
+  // routes already do this — DMs were the outlier. Inbox unread badges
+  // still clear on next navigation back; worst case a stale unread dot
+  // persists for one extra round trip if the network is slow.
+  void markThreadReadAction(thread.id).catch(() => {});
 
   const adapted = (messages ?? []).map((m: any) => {
     const a = Array.isArray(m.author) ? m.author[0] : m.author;

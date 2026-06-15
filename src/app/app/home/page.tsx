@@ -22,40 +22,20 @@ export default async function HomePage() {
   // the next-event banner doesn't flip a day early after 8 PM Tampa.
   const today = localTodayISO();
 
-  // Birthdays today — filtered in Postgres in Tampa time so we don't
-  // pull every birthday profile and the result doesn't drift when the
-  // server clock isn't Eastern. The RPC returns only the matching rows.
-  const { data: birthdayRows } = await supabase.rpc("birthdays_today");
-  const birthdaysToday: { id: string; full_name: string; profile_photo_url: string | null }[] =
-    (birthdayRows ?? []) as any[];
-
-  // Fire-and-forget book the auto-post for each birthday member. The RPC
-  // is idempotent (unique on member_id + posted_for_date), so multiple
-  // home renders won't create dupes.
-  if (birthdaysToday.length > 0) {
-    void (async () => {
-      try {
-        await Promise.all(
-          birthdaysToday.map((b) =>
-            supabase.rpc("book_birthday_auto_post", { p_member_id: b.id }),
-          ),
-        );
-      } catch (e) {
-        console.warn("[home] birthday auto-post failed (non-fatal)", e);
-      }
-    })();
-  }
-
   // Phase 1: fan everything that only needs the profile into ONE Promise.all.
   // Previously these ran serially (next-event → pending → unread → members →
   // groups → posts) which stacked five round-trip waits before the first
-  // byte. Running in parallel is the single biggest win here.
+  // byte. Running in parallel is the single biggest win here. birthdays_today
+  // was sitting in front of this Promise.all on its own await — folded in
+  // per Codex audit so the cost overlaps the other queries instead of
+  // stacking onto first-byte time.
   const [
     { data: nextEvent },
     pendingRes,
     { count: unread },
     { data: joinedGroups },
     postsRes,
+    birthdayRes,
   ] = await Promise.all([
     supabase
       .from("events")
@@ -102,10 +82,33 @@ export default async function HomePage() {
       .order("pinned", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(50),
+    // Birthdays today — Tampa-time filtered via Postgres RPC. Folded into
+    // this Promise.all so it overlaps with the other queries; previously
+    // it stacked an extra serial round trip onto first-byte time.
+    supabase.rpc("birthdays_today"),
   ]);
   const pendingCount = pendingRes.count ?? 0;
   const posts = postsRes.data;
   if (postsRes.error) console.error("[/app/home] posts query failed", postsRes.error);
+  const birthdaysToday: { id: string; full_name: string; profile_photo_url: string | null }[] =
+    (birthdayRes.data ?? []) as any[];
+
+  // Fire-and-forget book the auto-post for each birthday member. The RPC
+  // is idempotent (unique on member_id + posted_for_date), so multiple
+  // home renders won't create dupes.
+  if (birthdaysToday.length > 0) {
+    void (async () => {
+      try {
+        await Promise.all(
+          birthdaysToday.map((b) =>
+            supabase.rpc("book_birthday_auto_post", { p_member_id: b.id }),
+          ),
+        );
+      } catch (e) {
+        console.warn("[home] birthday auto-post failed (non-fatal)", e);
+      }
+    })();
+  }
 
   // Phase 2: stats RPC (likes, comments, my-flags, poll votes) +
   // first-5 comment previews. Consolidated from 4 queries into 2.
@@ -324,10 +327,14 @@ export default async function HomePage() {
             {nextEvent.image_url ? (
               <div className="relative rounded-2xl overflow-hidden ring-1 ring-gold-500/30 aspect-[16/9]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* Eager-load: this image is above the fold on /app/home,
+                    which is the first screen brothers see. loading="lazy"
+                    here used to add ~200-400ms to perceived first paint. */}
                 <img
                   src={nextEvent.image_url}
                   alt=""
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
                 {/* Dark gradient overlay so text stays readable */}

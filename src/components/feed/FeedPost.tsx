@@ -327,9 +327,15 @@ export function FeedPost({
           </div>
         ) : null}
 
-        {/* Content with parsed @mentions */}
+        {/* Content with parsed @mentions. break-words + overflow-wrap:anywhere
+            force long unbroken URLs / handles to wrap inside the card —
+            without this they push the card width past the viewport and
+            iOS lets the whole page rubber-band sideways. */}
         {post.body ? (
-          <div className="px-4 pt-3 text-[15px] text-ink-100 leading-relaxed whitespace-pre-wrap">
+          <div
+            className="px-4 pt-3 text-[15px] text-ink-100 leading-relaxed whitespace-pre-wrap break-words"
+            style={{ overflowWrap: "anywhere" }}
+          >
             <RichText text={post.body} />
           </div>
         ) : null}

@@ -1,6 +1,5 @@
 import UIKit
 import Capacitor
-import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -8,21 +7,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // The CAPBridgeViewController's WKWebView isn't created yet at this
-        // point — defer until viewDidAppear fires so we know the scrollView
-        // exists, then lock its bouncing off. Without this the app rubber-
-        // bands horizontally (feels like a webpage) and vertical overscroll
-        // exposes the area behind the bottom nav. PullToRefresh draws its
-        // own indicator via touch events so it doesn't need the bounce.
-        NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            DispatchQueue.main.async {
-                lockWebViewBounces()
-            }
-        }
+        // Bounce lock + scroll-indicator suppression now lives in
+        // AppBridgeViewController so it runs at the exact moment the
+        // WKWebView is loaded into the view hierarchy. The previous
+        // didBecomeActive-based approach was racy on cold launch — the
+        // notification could fire before the webview existed and the
+        // lock would silently miss until the user backgrounded and
+        // reopened the app. See AppBridgeViewController.swift.
         return true
     }
 
@@ -61,36 +52,4 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
-}
-
-/// Walks the active window's view hierarchy, finds the WKWebView that
-/// Capacitor mounted, and turns off all rubber-band scrolling. Called
-/// from didBecomeActive (re-called when the app returns from background
-/// too, which is harmless — the properties are idempotent).
-private func lockWebViewBounces() {
-    guard let window = UIApplication.shared.connectedScenes
-            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
-            .first else { return }
-    if let webView = findWebView(in: window) {
-        webView.scrollView.bounces = false
-        webView.scrollView.alwaysBounceVertical = false
-        webView.scrollView.alwaysBounceHorizontal = false
-        // Belt + suspenders for horizontal — bouncesZoom and contentInset
-        // can still let the page rubber-band sideways on some iOS builds.
-        webView.scrollView.contentInsetAdjustmentBehavior = .never
-        // Native apps don't show a side scrollbar indicator. CSS
-        // ::-webkit-scrollbar handles the document level, but WKWebView's
-        // scrollView has its own indicators on top — kill those too so
-        // the app reads as native, not a webpage in a frame.
-        webView.scrollView.showsVerticalScrollIndicator = false
-        webView.scrollView.showsHorizontalScrollIndicator = false
-    }
-}
-
-private func findWebView(in view: UIView) -> WKWebView? {
-    if let wv = view as? WKWebView { return wv }
-    for sub in view.subviews {
-        if let found = findWebView(in: sub) { return found }
-    }
-    return nil
 }

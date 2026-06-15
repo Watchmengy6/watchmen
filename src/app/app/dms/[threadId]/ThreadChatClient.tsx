@@ -357,15 +357,25 @@ export function ThreadChatClient({
                     />
                   ) : null}
                   {m.media_url && m.media_type === "video" ? (
-                    <video src={m.media_url} controls className="rounded-2xl max-h-72" />
+                    <video
+                      src={m.media_url}
+                      controls
+                      playsInline
+                      className="block w-full max-w-full max-h-72 rounded-2xl object-contain bg-black"
+                    />
                   ) : null}
                   {m.body && !(m.body === "[image]" || m.body === "[video]" || m.body === "📷 Photo" || m.body === "🎥 Video") ? (
+                    // break-words + overflow-wrap:anywhere force long
+                    // URLs / unbroken tokens to wrap inside the bubble
+                    // instead of pushing the page sideways.
                     <div
                       className={
-                        m.is_me
-                          ? "rounded-2xl rounded-br-md bg-gold-400 text-black px-3.5 py-2 text-[15px] leading-snug mt-1"
-                          : "rounded-2xl rounded-bl-md bg-ink-800 hairline text-ink-100 px-3.5 py-2 text-[15px] leading-snug mt-1"
+                        (m.is_me
+                          ? "rounded-2xl rounded-br-md bg-gold-400 text-black"
+                          : "rounded-2xl rounded-bl-md bg-ink-800 hairline text-ink-100") +
+                        " px-3.5 py-2 text-[15px] leading-snug mt-1 whitespace-pre-wrap break-words"
                       }
+                      style={{ overflowWrap: "anywhere" }}
                     >
                       {m.body}
                     </div>
