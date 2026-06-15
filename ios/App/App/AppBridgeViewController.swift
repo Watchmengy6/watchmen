@@ -45,6 +45,14 @@ class AppBridgeViewController: CAPBridgeViewController {
     /// Disables rubber-band scrolling and scroll indicators on Capacitor's
     /// managed WKWebView so the app reads as native instead of "webpage
     /// in a frame." See class doc for why this lives here vs. AppDelegate.
+    ///
+    /// `bounces = false` only kills overscroll — if the WKWebView's
+    /// internal contentSize.width ever exceeds the viewport width (which
+    /// can happen briefly during HEIC decode or after a picker dismiss
+    /// reflows the layout), the user can still pan horizontally WITHIN
+    /// that range. We force single-axis pan-lock AND pin contentSize.width
+    /// to the scrollView bounds so horizontal panning becomes impossible
+    /// regardless of what the DOM does.
     private func lockWebViewScrollBehavior() {
         guard let webView = self.webView else {
             print("[AppBridgeVC] webView not ready yet — skipping lock")
@@ -54,6 +62,16 @@ class AppBridgeViewController: CAPBridgeViewController {
         sv.bounces = false
         sv.alwaysBounceVertical = false
         sv.alwaysBounceHorizontal = false
+        // Single-axis pan — once a gesture starts vertical, it stays
+        // vertical for the duration of the touch. Prevents diagonal
+        // drift that reads as "the page slid sideways."
+        sv.isDirectionalLockEnabled = true
+        // Pin horizontal content size to viewport width so even if the
+        // DOM briefly measures wider, the scrollView has nowhere to pan.
+        // Updated again on viewDidAppear (after picker dismisses).
+        if sv.bounds.width > 0 {
+            sv.contentSize = CGSize(width: sv.bounds.width, height: sv.contentSize.height)
+        }
         // contentInsetAdjustmentBehavior = .never stops iOS from
         // auto-padding the scroll view based on safe areas. We handle
         // safe-area insets in CSS so the native layer should not also
@@ -61,6 +79,6 @@ class AppBridgeViewController: CAPBridgeViewController {
         sv.contentInsetAdjustmentBehavior = .never
         sv.showsVerticalScrollIndicator = false
         sv.showsHorizontalScrollIndicator = false
-        print("[AppBridgeVC] lock applied — bounces=\(sv.bounces) horiz=\(sv.alwaysBounceHorizontal)")
+        print("[AppBridgeVC] lock applied — bounces=\(sv.bounces) dirLock=\(sv.isDirectionalLockEnabled) contentW=\(sv.contentSize.width) boundsW=\(sv.bounds.width)")
     }
 }

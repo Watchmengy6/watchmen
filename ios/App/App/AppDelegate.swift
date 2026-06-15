@@ -78,12 +78,17 @@ private func applyLockToFirstWebView() -> Bool {
     sv.bounces = false
     sv.alwaysBounceVertical = false
     sv.alwaysBounceHorizontal = false
-    // contentInsetAdjustmentBehavior = .never stops iOS from
-    // auto-padding based on safe areas; we handle insets in CSS.
+    // Single-axis pan + horizontal contentSize pin — see AppBridgeViewController
+    // for the rationale. Keeping both paths in lockstep so whichever runs
+    // first leaves the scrollView in the same state.
+    sv.isDirectionalLockEnabled = true
+    if sv.bounds.width > 0 {
+        sv.contentSize = CGSize(width: sv.bounds.width, height: sv.contentSize.height)
+    }
     sv.contentInsetAdjustmentBehavior = .never
     sv.showsVerticalScrollIndicator = false
     sv.showsHorizontalScrollIndicator = false
-    print("[AppDelegate] WebView lock applied via retry fallback")
+    print("[AppDelegate] WebView lock applied via retry fallback — contentW=\(sv.contentSize.width) boundsW=\(sv.bounds.width)")
     return true
 }
 
