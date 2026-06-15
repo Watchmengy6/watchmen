@@ -511,10 +511,15 @@ export function FeedPost({
               ))
             )}
             <div className="pt-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-end gap-2">
                 <Avatar src={meAvatar ?? undefined} name={meName ?? "You"} size={28} />
-                <div className="flex-1 flex items-center gap-2">
-                  <input
+                <div className="flex-1 min-w-0 flex items-end gap-2">
+                  {/* A <textarea>, not <input>: an <input> is single-line and
+                      scrolls a long comment / URL sideways off the field
+                      instead of wrapping. The textarea wraps as you type,
+                      grows up to ~5 lines (max-h-32) then scrolls. min-w-0 +
+                      break-words keep an unbroken URL inside the bubble. */}
+                  <textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -524,7 +529,9 @@ export function FeedPost({
                       }
                     }}
                     placeholder="Add a comment…"
-                    className="flex-1 h-9 rounded-full bg-ink-800 hairline px-3 text-[14px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30"
+                    rows={1}
+                    className="flex-1 min-w-0 resize-none max-h-32 rounded-2xl bg-ink-800 hairline px-3 py-2 text-[14px] leading-snug text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 break-words"
+                    style={{ overflowWrap: "anywhere" }}
                   />
                   <button
                     type="button"

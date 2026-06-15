@@ -65,6 +65,15 @@ class AppBridgeViewController: CAPBridgeViewController {
             print("[AppBridgeVC] webView not ready yet — skipping lock")
             return
         }
+        // Restore the iOS edge-swipe-back gesture. Capacitor leaves this
+        // OFF by default, which is why swiping from the left edge to go
+        // back did nothing anywhere in the app. Next.js client-side
+        // navigations populate the WKWebView's history list, so this drives
+        // real back/forward. It rides a separate screen-edge pan recognizer,
+        // so it does NOT fight the horizontal contentOffset clamp below
+        // (that clamp only touches the scrollView's own pan).
+        webView.allowsBackForwardNavigationGestures = true
+
         let sv = webView.scrollView
         sv.bounces = false
         sv.alwaysBounceVertical = false

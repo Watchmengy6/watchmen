@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
 import { ThreadChatClient } from "./ThreadChatClient";
 import { markThreadReadAction } from "@/lib/dms/actions";
+import { BackButton } from "@/components/ui/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -82,13 +83,10 @@ export default async function DmThreadPage({
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-3 px-3 py-2.5">
-          <Link
-            href="/app/dms"
-            aria-label="Back"
+          <BackButton
+            fallbackHref="/app/dms"
             className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-ink-800 hairline text-ink-100 text-lg"
-          >
-            ‹
-          </Link>
+          />
           <Avatar src={headerAvatar ?? undefined} name={headerTitle} size={36} />
           <div className="flex-1 min-w-0">
             <div className="text-white text-[15px] font-semibold truncate">{headerTitle}</div>
