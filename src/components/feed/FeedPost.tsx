@@ -497,7 +497,10 @@ export function FeedPost({
                         label="Report"
                       />
                     </div>
-                    <div className="text-[14px] text-ink-100 leading-snug mt-0.5">
+                    <div
+                      className="text-[14px] text-ink-100 leading-snug mt-0.5 whitespace-pre-wrap break-words"
+                      style={{ overflowWrap: "anywhere" }}
+                    >
                       <RichText text={c.body} />
                     </div>
                     <div className="text-[10.5px] text-ink-400 mt-1">

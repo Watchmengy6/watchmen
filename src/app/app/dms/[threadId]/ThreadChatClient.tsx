@@ -78,8 +78,21 @@ export function ThreadChatClient({
     ),
   );
 
-  // Auto-scroll to bottom when new messages arrive.
+  // When loadOlder() prepends history, messages.length grows but the
+  // user is reading mid-scroll — we DON'T want to yank them to the
+  // bottom. This flag is set right before the prepend and consumed by
+  // the auto-scroll effect below to skip a single firing.
+  const skipNextAutoScrollRef = useRef(false);
+
+  // Auto-scroll to bottom when new messages arrive (a new send or a
+  // realtime insert from another brother). The skip-flag above
+  // suppresses this for the single tick after loadOlder() prepends so
+  // the user stays anchored on what they were reading.
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
@@ -300,6 +313,10 @@ export function ThreadChatClient({
         });
       }
     });
+    // Suppress the next auto-scroll-to-bottom fire — the upcoming
+    // setMessages prepend bumps messages.length, which would otherwise
+    // yank the user away from what they were reading.
+    skipNextAutoScrollRef.current = true;
     setMessages((prev) => [
       ...r.messages.map((m) => ({
         id: m.id,
