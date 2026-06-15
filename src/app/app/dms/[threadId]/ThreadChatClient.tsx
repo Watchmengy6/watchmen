@@ -26,6 +26,11 @@ interface Props {
   meId: string;
   meName: string;
   meAvatar?: string | null;
+  /** Server-side page size for the initial messages load. The client
+   *  uses `initialMessages.length >= initialPageSize` to decide whether
+   *  to show the "Load older" affordance. Defaults to 200 (DM/group);
+   *  event chat passes 50 to keep first paint snappy. */
+  initialPageSize?: number;
 }
 
 export function ThreadChatClient({
@@ -34,17 +39,21 @@ export function ThreadChatClient({
   meId,
   meName,
   meAvatar,
+  initialPageSize = 200,
 }: Props) {
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  // hasMore is true if the initial page hit the 200-msg cap (older
-  // history likely exists). We assume `initialMessages.length >= 200`
-  // → could have more; smaller → we already have everything.
+  // hasMore is true if the initial page hit the server-side page cap
+  // (older history likely exists). Compares against initialPageSize
+  // because event chat loads 50 and DM/group load 200 — using a
+  // hardcoded threshold here would either hide the "Load older"
+  // affordance on event chats with 50+ messages or show it on
+  // DMs/groups with fewer than 200.
   const [hasMoreOlder, setHasMoreOlder] = useState(
-    initialMessages.length >= 200,
+    initialMessages.length >= initialPageSize,
   );
   const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);

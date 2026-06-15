@@ -60,7 +60,11 @@ export default async function EventChatPage({
     .eq("thread_id", thread.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-    .limit(200);
+    // Initial page: 50 messages. Event rooms during a live event hit
+    // high message volume; serializing 200 on open was the single
+    // biggest contributor to "Chats tab feels slow" on real devices.
+    // Older history loads on-demand via ThreadChatClient's load-older.
+    .limit(50);
   const messages = (messagesDesc ?? []).slice().reverse();
 
   void markThreadReadAction(thread.id).catch(() => {});
@@ -111,6 +115,7 @@ export default async function EventChatPage({
         meId={profile.id}
         meName={profile.full_name}
         meAvatar={profile.profile_photo_url}
+        initialPageSize={50}
       />
     </div>
   );

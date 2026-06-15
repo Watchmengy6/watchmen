@@ -22,22 +22,26 @@ export default async function GroupDetail({
     .maybeSingle();
   if (!group) notFound();
 
-  const { data: members } = await supabase
-    .from("group_members")
-    .select(
-      "user_id, role, profile:profiles!group_members_user_id_fkey(id, full_name, profile_photo_url)",
-    )
-    .eq("group_id", group.id);
+  // Members + thread both depend only on group.id, not on each other —
+  // run in parallel. Saves ~one round-trip on every group open; per the
+  // Codex Part 2 audit this was the single biggest perf win on the
+  // group detail page (~500ms on real-device cold loads).
+  const [{ data: members }, { data: thread }] = await Promise.all([
+    supabase
+      .from("group_members")
+      .select(
+        "user_id, role, profile:profiles!group_members_user_id_fkey(id, full_name, profile_photo_url)",
+      )
+      .eq("group_id", group.id),
+    supabase
+      .from("threads")
+      .select("id")
+      .eq("group_id", group.id)
+      .maybeSingle(),
+  ]);
 
   const memberCount = members?.length ?? 0;
   const iAmMember = (members ?? []).some((m: any) => m.user_id === profile.id);
-
-  // The group's chat thread.
-  const { data: thread } = await supabase
-    .from("threads")
-    .select("id")
-    .eq("group_id", group.id)
-    .maybeSingle();
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">

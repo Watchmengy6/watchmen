@@ -63,20 +63,33 @@ export async function sendThreadMessageAction(
   // crash the request.
   void (async () => {
     try {
-      const { data: thread } = await supabase
-        .from("threads")
-        .select("kind, title, group_id")
-        .eq("id", threadId)
-        .maybeSingle();
-      const { data: members } = await supabase
-        .from("thread_members")
-        .select("user_id, muted, profile:profiles!thread_members_user_id_fkey(id, full_name)")
-        .eq("thread_id", threadId);
-      const { data: meProfile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", me.id)
-        .maybeSingle();
+      // Three independent fetches — parallelize. Previously serial,
+      // which stretched push fan-out latency by ~150-300ms on slow
+      // connections (the sender doesn't see this, but recipients get
+      // their banner faster when this work finishes sooner).
+      // Also dropped the per-member profile join — the sender's name
+      // is fetched separately below and member profiles aren't used
+      // for the push payload anyway.
+      const [
+        { data: thread },
+        { data: members },
+        { data: meProfile },
+      ] = await Promise.all([
+        supabase
+          .from("threads")
+          .select("kind, title, group_id")
+          .eq("id", threadId)
+          .maybeSingle(),
+        supabase
+          .from("thread_members")
+          .select("user_id, muted")
+          .eq("thread_id", threadId),
+        supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", me.id)
+          .maybeSingle(),
+      ]);
 
       const senderName = meProfile?.full_name ?? "A brother";
       const previewBody = mediaUrl

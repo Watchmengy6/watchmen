@@ -43,7 +43,13 @@ export default async function GroupsPage({
     supabase
       .from("groups")
       .select("id, name, description, category, kind, cover_url, created_at")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      // Cap at 100. Watchmen is invite-only with ~100 brothers; even
+      // if every brother created two groups we'd hit 200 max, but
+      // realistically the first 100 (newest first) covers the active
+      // set and the cap protects the page from blowing up on a future
+      // import/seed event.
+      .limit(100),
     supabase.from("group_members").select("group_id").eq("user_id", profile.id),
   ]);
   const myGroupIds = new Set((myMemberships ?? []).map((r: any) => r.group_id));
