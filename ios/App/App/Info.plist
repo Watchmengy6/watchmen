@@ -54,18 +54,27 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
-	<!-- v1.0: NSCameraUsageDescription and NSMicrophoneUsageDescription are
-	     intentionally omitted. The app uses plain HTML <input type="file"
-	     accept="image/*,video/*"> elements for media upload. iOS WebKit's
-	     file-input action sheet conditionally shows "Take Photo or Video"
-	     ONLY when NSCameraUsageDescription is declared in Info.plist;
-	     without that key, the sheet collapses to just "Photo Library" and
-	     "Browse" — both of which are crash-safe paths. This is the fix
-	     for Apple Review's June 9 2026 rejection (iPad camera crash on
-	     the photo upload control).
-	     NSPhotoLibraryUsageDescription is kept because legacy iOS versions
-	     prompt on library access; NSPhotoLibraryAddUsageDescription is
-	     used by the digital-member-card "Save to Photos" action. -->
+	<!-- v1.0: full media permission set. iOS WKWebView's file-input action
+	     sheet ALWAYS includes "Take Photo or Video" regardless of accept
+	     attribute or Info.plist content. The only way to avoid a hard
+	     __abort_with_payload crash when the user taps that option is to
+	     declare NSCameraUsageDescription and NSMicrophoneUsageDescription
+	     (iOS terminates the app on camera access without these keys).
+	     Hiding the option entirely would require a custom Capacitor plugin
+	     or AppDelegate UIDocumentPickerViewController interception, both
+	     of which were attempted in 1.0(4) and 1.0(5) but failed Swift
+	     Package Manager resolution. Restoring these keys is the
+	     crash-free path for App Store approval.
+	     NSPhotoLibraryUsageDescription is required for legacy library
+	     access; NSPhotoLibraryAddUsageDescription is used by the
+	     digital-member-card "Save to Photos" action;
+	     NSCameraUsageDescription gates the camera path in the file input;
+	     NSMicrophoneUsageDescription gates audio capture when recording
+	     video through the camera path. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Watchmen accesses your camera only when you tap "Take Photo or Video" in the upload picker to capture a new photo or short video to share with the brotherhood. No background camera access.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Watchmen accesses your microphone only when you choose to record a video in the upload picker so the video can include sound. No background microphone access.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Watchmen reads photos from your library when you choose to attach one to a post, message, group banner, or your profile photo. Only the photos you explicitly select are shared.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

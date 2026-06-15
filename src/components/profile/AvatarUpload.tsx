@@ -56,7 +56,7 @@ export function AvatarUpload({
             busy && "opacity-60 pointer-events-none",
           )}
         >
-          <input type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp" className="hidden" onChange={onPick} />
+          <input type="file" accept="image/*" className="hidden" onChange={onPick} />
           {busy ? "Uploading…" : url ? "Change photo" : "Upload photo"}
         </label>
         {url ? (

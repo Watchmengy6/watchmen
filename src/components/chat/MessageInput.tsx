@@ -93,7 +93,7 @@ export function MessageInput({
             <input
               ref={fileRef}
               type="file"
-              accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp,.mp4,.mov,.m4v"
+              accept="image/*,video/*"
               onChange={onPickFile}
               className="hidden"
             />

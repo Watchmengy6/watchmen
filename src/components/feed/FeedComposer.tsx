@@ -446,7 +446,7 @@ export function FeedComposer({
           <input
             ref={fileRef}
             type="file"
-            accept=".jpg,.jpeg,.png,.heic,.heif,.gif,.webp,.mp4,.mov,.m4v"
+            accept="image/*,video/*"
             onChange={handleFileChange}
             className="hidden"
           />
