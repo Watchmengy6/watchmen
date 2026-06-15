@@ -95,16 +95,20 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 bg-ink-900/70 backdrop-blur-xl border-t border-white/[0.05]"
-      // max(env(...), 20px) guarantees ≥20px of home-indicator clearance
-      // even when env() resolves to 0 — which it does in Capacitor
-      // WKWebView after iOS reflow events (file picker dismissal,
-      // orientation change, etc). The old `env(..., 20px)` CSS-fallback
-      // syntax only triggers when env() is unsupported, NOT when env()
-      // returns 0, so the nav drifted into the home-indicator pill.
-      // +0.375rem on top so labels stay clear of the indicator.
+      // max(env(...), 40px) — the floor MUST be ≥ the iPhone home
+      // indicator height (34pt). The previous 20px fallback was the bug:
+      // when iOS WKWebView briefly resets env(safe-area-inset-bottom)
+      // to 0 during router.refresh() reflow (after every feed post),
+      // max() fell back to 20px, which is SHORTER than the 34pt
+      // indicator. Result: the labels (Feed / Groups / Events / Chats /
+      // You) ended up underneath the home indicator pill and the nav
+      // looked "displaced" until app restart. 40px guarantees clearance
+      // even during the transient 0 measurement, AND +0.5rem on top
+      // gives the labels actual breathing room (the old +0.375rem was
+      // too tight).
       style={{
         paddingBottom:
-          "calc(max(env(safe-area-inset-bottom), 20px) + 0.375rem)",
+          "calc(max(env(safe-area-inset-bottom), 40px) + 0.5rem)",
       }}
     >
       <div className="grid grid-cols-5 pt-1.5">

@@ -115,7 +115,11 @@ class AppBridgeViewController: CAPBridgeViewController {
         let sizeObs = sv.observe(\.contentSize, options: [.initial, .new]) { [weak self] scrollView, _ in
             guard scrollView.zoomScale <= 1.001 else { return }
             let w = scrollView.bounds.width
-            guard w > 0, scrollView.contentSize.width > w + 0.5 else { return }
+            // Tightened from `> w + 0.5` to `> w` so the clamp also
+            // catches sub-pixel drift after router.refresh(). The 0.5px
+            // tolerance was the gap that let post-reflow micro-motion
+            // sneak through and read as "the screen moves after I post".
+            guard w > 0, scrollView.contentSize.width > w else { return }
             let oldWidth = scrollView.contentSize.width
             scrollView.contentSize = CGSize(
                 width: w,
