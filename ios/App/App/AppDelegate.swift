@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,49 +8,88 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Bounce lock + scroll-indicator suppression now lives in
-        // AppBridgeViewController so it runs at the exact moment the
-        // WKWebView is loaded into the view hierarchy. The previous
-        // didBecomeActive-based approach was racy on cold launch — the
-        // notification could fire before the webview existed and the
-        // lock would silently miss until the user backgrounded and
-        // reopened the app. See AppBridgeViewController.swift.
+        // Primary path: AppBridgeViewController applies the WKWebView bounce
+        // lock from viewDidLoad / viewDidAppear. That's the cleanest place
+        // for it because the bridge VC owns the webview directly.
+        //
+        // Belt + suspenders fallback below: if the storyboard custom-class
+        // resolution silently falls back to stock CAPBridgeViewController
+        // (which happens when module names mismatch in Interface Builder),
+        // this retry loop walks the window hierarchy every 100ms for two
+        // seconds until it finds a WKWebView and applies the same lock.
+        // Both paths are idempotent — running both is harmless.
+        applyLockWithRetries(remaining: 20)
+
+        // Re-apply on foreground in case iOS reset any of these between
+        // backgrounding and re-activation.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            DispatchQueue.main.async {
+                _ = applyLockToFirstWebView()
+            }
+        }
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-    }
-
-    func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
-    }
+    func applicationWillResignActive(_ application: UIApplication) {}
+    func applicationDidEnterBackground(_ application: UIApplication) {}
+    func applicationWillEnterForeground(_ application: UIApplication) {}
+    func applicationDidBecomeActive(_ application: UIApplication) {}
+    func applicationWillTerminate(_ application: UIApplication) {}
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Called when the app was launched with a url. Feel free to add additional processing here,
-        // but if you want the App API to support tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+    /// Polls the window hierarchy looking for the Capacitor WKWebView. Applies
+    /// the scroll/bounce lock the moment it appears. Bails after `remaining`
+    /// attempts so we don't loop forever on a misconfigured build.
+    private func applyLockWithRetries(remaining: Int) {
+        DispatchQueue.main.async {
+            if applyLockToFirstWebView() {
+                return
+            }
+            if remaining > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    self?.applyLockWithRetries(remaining: remaining - 1)
+                }
+            }
+        }
+    }
+}
+
+/// Walks the active window's view hierarchy, finds the WKWebView Capacitor
+/// mounted, and turns off rubber-band scrolling + scroll indicators. Returns
+/// true if a WKWebView was found and locked; false if nothing to lock yet.
+@discardableResult
+private func applyLockToFirstWebView() -> Bool {
+    guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first else { return false }
+    guard let webView = findWebView(in: window) else { return false }
+    let sv = webView.scrollView
+    sv.bounces = false
+    sv.alwaysBounceVertical = false
+    sv.alwaysBounceHorizontal = false
+    // contentInsetAdjustmentBehavior = .never stops iOS from
+    // auto-padding based on safe areas; we handle insets in CSS.
+    sv.contentInsetAdjustmentBehavior = .never
+    sv.showsVerticalScrollIndicator = false
+    sv.showsHorizontalScrollIndicator = false
+    return true
+}
+
+private func findWebView(in view: UIView) -> WKWebView? {
+    if let wv = view as? WKWebView { return wv }
+    for sub in view.subviews {
+        if let found = findWebView(in: sub) { return found }
+    }
+    return nil
 }
