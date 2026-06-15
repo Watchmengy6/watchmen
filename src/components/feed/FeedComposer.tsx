@@ -425,8 +425,9 @@ export function FeedComposer({
               ) : (
                 <video
                   src={mediaUrl}
-                  className="w-full max-h-72 rounded-xl"
+                  className="block w-full max-w-full max-h-72 rounded-xl object-contain bg-black"
                   controls
+                  playsInline
                 />
               )}
               <button

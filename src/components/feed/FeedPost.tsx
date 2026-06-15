@@ -374,19 +374,24 @@ export function FeedPost({
 
         {post.image_url ? (
           post.media_type === "video" ? (
-            // Native HTML video with full controls so the brother can
-            // scrub, mute, and unmute. `playsInline` keeps it embedded in
-            // the feed instead of taking over the screen on iOS Safari /
-            // WKWebView. NO `muted` attribute — without it, iOS still
-            // ships the volume button so brothers can hear the audio
-            // track. `preload=metadata` loads enough to show the poster
-            // frame without pulling the whole file down on scroll past.
+            // Video render. `controls` exposes play/scrub/volume,
+            // `playsInline` keeps it inside the feed card on iOS,
+            // `preload="metadata"` pulls down the first frame so the
+            // card isn't a black box before play.
+            // The poster sibling was uploaded at `${mediaUrl}.poster.jpg`
+            // — see lib/uploads/client.ts. Derive it here instead of
+            // round-tripping through a new schema column.
+            // object-contain + bg-black gives portrait clips a clean
+            // letterbox without breaking the feed card width — the old
+            // unconstrained render pushed past max-w-screen-sm on
+            // portrait sources and let the whole page scroll sideways.
             <video
               src={post.image_url}
+              poster={`${post.image_url}.poster.jpg`}
               controls
               playsInline
               preload="metadata"
-              className="mt-3 block w-full max-w-full max-h-[420px] bg-black"
+              className="mt-3 block w-full max-w-full max-h-[420px] object-contain bg-black"
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element

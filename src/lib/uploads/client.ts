@@ -105,7 +105,12 @@ export async function uploadMedia(file: File): Promise<
   const payload = isImage ? await resizeImageFile(file) : file;
 
   const safeName = payload.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-  const path = `${user.id}/${Date.now()}-${safeName}`;
+  // Single timestamp shared by the media path AND any poster sibling.
+  // Earlier code called Date.now() twice, so a 1-ms tick between the two
+  // calls broke poster URL derivation — the feed renderer expects the
+  // poster to live at exactly `${mediaUrl}.poster.jpg`.
+  const stamp = Date.now();
+  const path = `${user.id}/${stamp}-${safeName}`;
   const { error: upErr } = await supabase.storage
     .from("chat-media")
     .upload(path, payload, { upsert: false, contentType: payload.type });
@@ -122,7 +127,7 @@ export async function uploadMedia(file: File): Promise<
     try {
       const posterBlob = await generateVideoPoster(file);
       if (posterBlob) {
-        const posterPath = `${user.id}/${Date.now()}-${safeName}.poster.jpg`;
+        const posterPath = `${user.id}/${stamp}-${safeName}.poster.jpg`;
         const { error: pErr } = await supabase.storage
           .from("chat-media")
           .upload(posterPath, posterBlob, {
