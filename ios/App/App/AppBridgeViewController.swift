@@ -22,14 +22,23 @@ class AppBridgeViewController: CAPBridgeViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Diagnostic: this print confirms the storyboard's custom-class
+        // wiring is actually instantiating OUR subclass and not silently
+        // falling back to stock CAPBridgeViewController. If you don't
+        // see this line in the Xcode console on app launch, the
+        // storyboard reference is wrong and the lock isn't running.
+        print("[AppBridgeVC] viewDidLoad — applying WKWebView lock")
         lockWebViewScrollBehavior()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Re-apply on appear in case iOS reset any of these (e.g. after
-        // a presented file picker is dismissed and reflows the view).
-        // The setters are idempotent.
+        // Re-apply on every appear — handles the case where a presented
+        // VC (UIImagePickerController for camera capture, PHPickerViewController
+        // for photo library, the share sheet) dismisses and iOS reflows
+        // our view. Without this, the bounce lock can be reset and the
+        // page can rubber-band sideways after every camera dismiss.
+        print("[AppBridgeVC] viewDidAppear — re-applying WKWebView lock")
         lockWebViewScrollBehavior()
     }
 
@@ -37,7 +46,10 @@ class AppBridgeViewController: CAPBridgeViewController {
     /// managed WKWebView so the app reads as native instead of "webpage
     /// in a frame." See class doc for why this lives here vs. AppDelegate.
     private func lockWebViewScrollBehavior() {
-        guard let webView = self.webView else { return }
+        guard let webView = self.webView else {
+            print("[AppBridgeVC] webView not ready yet — skipping lock")
+            return
+        }
         let sv = webView.scrollView
         sv.bounces = false
         sv.alwaysBounceVertical = false
@@ -49,5 +61,6 @@ class AppBridgeViewController: CAPBridgeViewController {
         sv.contentInsetAdjustmentBehavior = .never
         sv.showsVerticalScrollIndicator = false
         sv.showsHorizontalScrollIndicator = false
+        print("[AppBridgeVC] lock applied — bounces=\(sv.bounces) horiz=\(sv.alwaysBounceHorizontal)")
     }
 }
