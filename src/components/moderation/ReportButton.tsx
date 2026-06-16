@@ -71,7 +71,12 @@ export function ReportButton({
       </button>
       {open ? (
         <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-3"
+          className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center p-3"
+          // z-[100] (above BottomNav's z-50) + paddingBottom clearance so
+          // the bottom-anchored sheet sits ABOVE the fixed BottomNav.
+          // Same fix as BlockButton — without this, the Send report /
+          // Cancel buttons end up underneath the tab bar.
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 88px)" }}
           onClick={(e) => {
             if (e.target === e.currentTarget && !busy) setOpen(false);
           }}

@@ -66,7 +66,14 @@ export function BlockButton({
       </button>
       {confirmOpen ? (
         <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-3"
+          className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center p-3"
+          // z-[100] (above BottomNav's z-50) + paddingBottom clearance so
+          // the bottom-anchored sheet sits ABOVE the fixed BottomNav.
+          // Without this, the confirm/cancel buttons end up underneath the
+          // tab bar and the user literally cannot tap them. The 88px
+          // matches the BottomNav height (40px safe-area floor + 0.5rem
+          // breathing + icon row).
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 88px)" }}
           onClick={(e) => {
             if (e.target === e.currentTarget && !pending) setConfirmOpen(false);
           }}
