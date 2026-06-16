@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { blockUserAction, unblockUserAction } from "@/lib/blocks/actions";
 import { useToast } from "@/components/ui/Toast";
 
@@ -20,9 +21,11 @@ export function BlockButton({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, start] = useTransition();
   const { push } = useToast();
+  const router = useRouter();
 
   function doToggle() {
     start(async () => {
+      const wasBlocking = !isBlocked;
       const r = isBlocked
         ? await unblockUserAction(targetProfileId)
         : await blockUserAction(targetProfileId);
@@ -38,6 +41,16 @@ export function BlockButton({
         variant: "success",
       });
       setConfirmOpen(false);
+      // After a successful BLOCK, the blocked member's profile route
+      // (/app/members/{id}) becomes 404 because RLS now hides them.
+      // If the user tapped Block from that profile page, leaving them
+      // there shows a "404 — This page could not be found." Push them
+      // to the feed so they land somewhere valid. Unblock doesn't need
+      // this because the user is typically on the settings/blocked
+      // list page, which stays valid.
+      if (wasBlocking) {
+        router.push("/app/home");
+      }
     });
   }
 
