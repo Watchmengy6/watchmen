@@ -55,12 +55,57 @@ export default async function PendingPage() {
           </form>
         </CardBody>
       </Card>
-      {/* Only show the PWA install hint on web — native iOS users are
-          already inside the installed app. */}
+      {/* Only show install nudges on web — native iOS users are already
+          inside the installed app.
+
+          Now that Watchmen GY6 is live on the App Store (1.0.1 ships
+          with production APNs), the App Store download is the primary
+          path. Pending applicants install the app while leadership
+          reviews their request so they're ready the moment the
+          approval email + push hits. The legacy PWA "Add to Home Screen"
+          hint is preserved as a smaller fallback for users who can't
+          access the App Store (e.g. desktop preview). */}
       <WebOnly>
-        <p className="mt-6 text-ink-400 text-xs">
-          Tap <span className="text-ink-200">Share → Add to Home Screen</span> in Safari to install the app.
-        </p>
+        <div className="mt-7 w-full max-w-sm">
+          <div className="rounded-2xl bg-ink-800 hairline px-4 py-5 text-left">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-gold-300/80">
+              While you wait
+            </div>
+            <div className="text-white text-[15px] font-semibold mt-1.5">
+              Get the iPhone app
+            </div>
+            <p className="text-ink-300 text-[13px] leading-relaxed mt-2">
+              Install Watchmen so you&apos;re ready the moment leadership approves your request.
+            </p>
+            <a
+              href="https://apps.apple.com/app/id6776308985"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center justify-center gap-2.5 w-full h-12 rounded-xl bg-black ring-1 ring-white/15 text-white hover:bg-ink-900 transition-colors"
+              aria-label="Download Watchmen on the App Store"
+            >
+              {/* Apple logo SVG — matches Apple's badge spec at small size.
+                  We're using an inline mark rather than the official PNG
+                  badge to keep the page asset-light; the wordmark "App
+                  Store" is included as text so the link still satisfies
+                  Apple's identification guideline. */}
+              <svg
+                viewBox="0 0 384 512"
+                fill="currentColor"
+                className="h-6 w-6"
+                aria-hidden="true"
+              >
+                <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zM260.8 90.3c25.5-30.3 23.2-57.8 22.4-67.8-22.5 1.3-48.5 15.3-63.3 32.6-16.3 18.6-25.9 41.6-23.8 66.4 24.3 1.9 46.5-10.6 64.7-31.2z" />
+              </svg>
+              <span className="text-[14.5px] font-semibold">Download on the App Store</span>
+            </a>
+          </div>
+          <p className="mt-3 text-ink-400 text-xs text-center">
+            Don&apos;t have an iPhone? Tap{" "}
+            <span className="text-ink-200">Share → Add to Home Screen</span> in
+            Safari to use the web version meanwhile.
+          </p>
+        </div>
       </WebOnly>
     </main>
   );
