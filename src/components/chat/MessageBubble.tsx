@@ -189,7 +189,17 @@ export function MessageBubble({
               />
             ) : null}
             {message.content ? (
-              <div className="whitespace-pre-wrap break-words">
+              // overflow-wrap: anywhere is stricter than break-words —
+              // it lets the browser break at ANY character when needed,
+              // not just word boundaries. Without this, a long unbroken
+              // URL in a DM (no spaces, no obvious break points) pushes
+              // the bubble past the viewport and iOS rubber-bands the
+              // whole conversation sideways. Matches the same fix
+              // applied to feed post bodies and comments in FeedPost.tsx.
+              <div
+                className="whitespace-pre-wrap break-words"
+                style={{ overflowWrap: "anywhere" }}
+              >
                 {renderContent(message.content, mine)}
               </div>
             ) : null}
