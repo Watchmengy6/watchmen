@@ -10,6 +10,11 @@ import { fmtTime } from "@/lib/utils/date";
 import { localTodayISO, parseLocalDate } from "@/lib/utils/localDate";
 import { createPostAction } from "@/lib/feed/actions";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
+import {
+  POSTS_QUERY_SELECT,
+  mapToFeedPostShape,
+  type FeedPostStats,
+} from "@/lib/feed/feedPostMapper";
 
 export const dynamic = "force-dynamic";
 
@@ -67,17 +72,11 @@ export default async function HomePage() {
       .eq("user_id", profile.id),
     supabase
       .from("posts")
-      .select(
-        `id, kind, body, created_at, media_url, media_type, meetup_when_at, meetup_location,
-         poll_question, poll_options, pinned,
-         author:profiles!posts_author_id_fkey(id, full_name, username, profile_photo_url, occupation, company, birthday),
-         tagged_group:groups!posts_tagged_group_id_fkey(id, name, category),
-         tagged_event:events!posts_tagged_event_id_fkey(id, title, event_date, start_time, location_name),
-         tagged_meetup:meetups!posts_tagged_meetup_id_fkey(
-           id, title, when_at, location_name,
-           host:profiles!meetups_host_user_id_fkey(id, full_name, profile_photo_url)
-         )`,
-      )
+      // Canonical select+join shape lives in src/lib/feed/feedPostMapper.ts
+      // so this query, createPostAction, and getFeedSliceAction stay
+      // byte-identical. If a joined relation is added, update the
+      // constant — not three call sites.
+      .select(POSTS_QUERY_SELECT)
       .is("deleted_at", null)
       // Pinned posts float to the top; within each group, newest first.
       .order("pinned", { ascending: false })
@@ -147,16 +146,10 @@ export default async function HomePage() {
     : { data: [], error: null };
   if (statsErr) console.error("[/app/home] home_feed_stats failed", statsErr);
 
-  const statsByPost = new Map<
-    string,
-    {
-      like_count: number;
-      comment_count: number;
-      my_liked: boolean;
-      my_poll_vote: number | null;
-      poll_vote_counts: Record<string, number> | null;
-    }
-  >();
+  // Stats Map — keyed by post_id so the per-post mapper lookup is O(1).
+  // Type from the shared mapper module so the page and the action
+  // can't drift on the stats shape.
+  const statsByPost = new Map<string, FeedPostStats>();
   (statsRows ?? []).forEach((s: any) => {
     statsByPost.set(s.post_id, {
       like_count: s.like_count ?? 0,
@@ -168,82 +161,15 @@ export default async function HomePage() {
     });
   });
 
-  // Adapt to FeedPostShape.
-  const feed: FeedPostShape[] = (posts ?? []).map((p: any) => {
-    const author = Array.isArray(p.author) ? p.author[0] : p.author;
-    const tg = Array.isArray(p.tagged_group) ? p.tagged_group[0] : p.tagged_group;
-    const te = Array.isArray(p.tagged_event) ? p.tagged_event[0] : p.tagged_event;
-    const tm = Array.isArray(p.tagged_meetup) ? p.tagged_meetup[0] : p.tagged_meetup;
-    // Pull stats for this post (from the consolidated RPC).
-    const stats = statsByPost.get(p.id);
-    const pollOpts = (p.poll_options as string[] | null) ?? null;
-    const voteCountsObj = stats?.poll_vote_counts ?? null;
-    const pollVotes = pollOpts
-      ? pollOpts.map(
-          (_: string, idx: number) => voteCountsObj?.[String(idx)] ?? 0,
-        )
-      : null;
-    const pollMyVote = stats?.my_poll_vote ?? null;
-
-    return {
-      id: p.id,
-      type: (p.kind as any) ?? "post",
-      body: p.body,
-      created_at: p.created_at,
-      image_url: p.media_url ?? null,
-      media_type: (p.media_type as "image" | "video" | "none" | null) ?? null,
-      pinned: !!p.pinned,
-      // Member-meetup feed posts carry structured when/where so the
-      // renderer can show a card without resolving a meetup entity.
-      meetup_when_at: p.meetup_when_at ?? null,
-      meetup_location: p.meetup_location ?? null,
-      // Poll fields. poll_options null = not a poll.
-      poll_question: p.poll_question ?? null,
-      poll_options: pollOpts,
-      poll_votes: pollVotes,
-      poll_my_vote: pollMyVote,
-      author: {
-        id: author?.id ?? "",
-        full_name: author?.full_name ?? "Brother",
-        username: author?.username ?? undefined,
-        profile_photo_url: author?.profile_photo_url ?? null,
-        birthday: author?.birthday ?? null,
-        role_text:
-          author?.occupation && author?.company
-            ? `${author.occupation} · ${author.company}`
-            : author?.occupation ?? null,
-      },
-      tagged_group: tg
-        ? { id: tg.id, name: tg.name, category: tg.category, emoji: null }
-        : null,
-      activity: te
-        ? {
-            kind: "event" as const,
-            data: te,
-            hostName: null,
-            hostPhoto: null,
-          }
-        : tm
-          ? (() => {
-              const host = Array.isArray(tm.host) ? tm.host[0] : tm.host;
-              return {
-                kind: "meetup" as const,
-                data: tm,
-                hostName: host?.full_name ?? null,
-                hostPhoto: host?.profile_photo_url ?? null,
-              };
-            })()
-          : null,
-      likes: stats?.like_count ?? 0,
-      liked_by_me: stats?.my_liked ?? false,
-      // Comments load on-demand when the brother expands a post.
-      // Home only carries the count; the actual rows come from
-      // loadPostCommentsAction triggered by FeedPost.
-      comments: [],
-      comment_count: stats?.comment_count ?? 0,
-      preview: false,
-    };
-  });
+  // Adapt to FeedPostShape using the shared mapper. The previous
+  // inline ~75-line transformation now lives in feedPostMapper.ts so
+  // createPostAction and getFeedSliceAction produce IDENTICAL shapes
+  // to what this page renders on the initial server pass. If we ever
+  // need to tweak how a post renders (e.g. add a new joined field),
+  // change it in ONE place.
+  const feed: FeedPostShape[] = (posts ?? []).map((p: any) =>
+    mapToFeedPostShape(p, statsByPost.get(p.id) ?? null),
+  );
 
   const taggableGroups = (joinedGroups ?? [])
     .map((row: any) => {

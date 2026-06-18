@@ -5,6 +5,12 @@ import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
+import type { FeedPostShape } from "@/components/feed/FeedPost";
+import {
+  POSTS_QUERY_SELECT,
+  mapToFeedPostShape,
+  type FeedPostStats,
+} from "@/lib/feed/feedPostMapper";
 
 /**
  * Load comments for a single post on demand. Replaces the old
@@ -421,7 +427,7 @@ export async function listMentionableMembers(): Promise<
  */
 export async function createPostAction(
   formData: FormData,
-): Promise<{ error?: string; postId?: string }> {
+): Promise<{ error?: string; postId?: string; post?: FeedPostShape }> {
   const supabase = supabaseServer();
   const {
     data: { user },
@@ -492,6 +498,13 @@ export async function createPostAction(
     meetupLocation = locStr;
   }
 
+  // We select the FULL posts-with-joins shape on insert so the caller
+  // can prepend the new post to the feed state without a separate
+  // refetch. Previously this was .select("id") and the page relied on
+  // revalidatePath() to refresh — that worked but cost a full route
+  // re-render (6+ parallel queries) on every post submit. Returning
+  // the shaped post here lets FeedComposer do an optimistic prepend
+  // (Phase 2 of the feed prepend refactor).
   const { data: post, error } = await supabase
     .from("posts")
     .insert({
@@ -508,7 +521,7 @@ export async function createPostAction(
       poll_question: pollQuestion,
       poll_options: pollOptions,
     })
-    .select("id")
+    .select(POSTS_QUERY_SELECT)
     .single();
 
   if (error) return { error: error.message };
@@ -592,8 +605,95 @@ export async function createPostAction(
   // Award points for the post (fire-and-forget).
   await awardPoints({ userId: me.id, action: "post_created", meta: { post_id: post.id, kind } });
 
+  // Shape the inserted row into FeedPostShape for the optimistic-prepend
+  // path. Fresh posts have zero likes / comments / poll votes so we
+  // hand the mapper null stats — no need to call home_feed_stats just
+  // to learn "this brand new post has 0 of everything."
+  const shaped = mapToFeedPostShape(post, null);
+
+  // We KEEP revalidatePath here as a safety net during the Phase 2/3
+  // rollout — callers that haven't migrated to optimistic prepend yet
+  // (e.g. preview routes, embedded surfaces) still get a working
+  // refresh. Once every caller uses `post` for prepend, this line
+  // becomes dead weight and can be removed in a separate cleanup.
   revalidatePath("/app/home");
-  return { postId: post.id };
+  return { postId: post.id, post: shaped };
+}
+
+/**
+ * Server action used by the home page's PullToRefresh AND by the
+ * post-submit reconciliation step in FeedComposer. Returns the same
+ * `{ posts }` slice the /app/home page builds on render — just the
+ * feed list, NOT the surrounding page data (next event, birthdays,
+ * unread count, joined groups).
+ *
+ * This is the "targeted refetch" that replaces `router.refresh()` on
+ * the post-submit and pull-to-refresh paths. Previously a fresh post
+ * or a pull-down triggered the full /app/home route to re-render,
+ * which fanned out six parallel queries (next event, pending count,
+ * unread, groups, posts, birthdays) plus the stats RPC. With this
+ * action we only refetch the two queries that actually drive the
+ * post list.
+ *
+ * Approved-member only — anonymous or pending callers get an empty
+ * array. Mirrors the gate the home page already enforces via
+ * requireApproved().
+ */
+export async function getFeedSliceAction(): Promise<{
+  error?: string;
+  posts?: FeedPostShape[];
+}> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return { posts: [] };
+
+  // Same query the home page uses for the initial feed render. Keep
+  // these two in sync via POSTS_QUERY_SELECT — if you add a joined
+  // relation to one, add it to the other.
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select(POSTS_QUERY_SELECT)
+    .is("deleted_at", null)
+    .order("pinned", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) return { error: error.message };
+
+  // Stats RPC for likes / comment_count / my_liked / poll votes.
+  const postIds = (posts ?? []).map((p: any) => p.id);
+  const { data: statsRows } = postIds.length
+    ? await supabase.rpc("home_feed_stats", {
+        p_post_ids: postIds,
+        p_viewer_id: me.id,
+      })
+    : { data: [] as any[] };
+
+  const statsByPost = new Map<string, FeedPostStats>();
+  (statsRows ?? []).forEach((s: any) => {
+    statsByPost.set(s.post_id, {
+      like_count: s.like_count ?? 0,
+      comment_count: s.comment_count ?? 0,
+      my_liked: !!s.my_liked,
+      my_poll_vote:
+        typeof s.my_poll_vote === "number" ? s.my_poll_vote : null,
+      poll_vote_counts: s.poll_vote_counts ?? null,
+    });
+  });
+
+  const shaped: FeedPostShape[] = (posts ?? []).map((p: any) =>
+    mapToFeedPostShape(p, statsByPost.get(p.id) ?? null),
+  );
+
+  return { posts: shaped };
 }
 
 /** Toggle a like on a post. */
