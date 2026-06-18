@@ -6,6 +6,7 @@ import {
   removePushSubscriptionAction,
   sendTestPushAction,
 } from "@/lib/push/actions";
+import { unregisterAllMyNativeDevicesAction } from "@/lib/push/native";
 import { useToast } from "@/components/ui/Toast";
 
 /** Convert a base64url VAPID public key to the Uint8Array the browser expects. */
@@ -130,6 +131,38 @@ export function EnablePushButton() {
   async function disable() {
     setState("busy");
     try {
+      // Native Capacitor branch — iOS WKWebView does NOT expose
+      // navigator.serviceWorker, so the web-only code below crashes
+      // with "undefined is not an object (evaluating
+      // 'navigator.serviceWorker.getRegistration')". Detect Capacitor
+      // first and call the server-side bulk unregister for native
+      // tokens instead. After deleting the DB rows, the OS still has
+      // notification permission granted (we don't programmatically
+      // revoke OS permission — only the user can), but the server
+      // won't fan out to this device anymore.
+      //
+      // After a successful disable we move the button back to
+      // "native-pending" so re-tapping it re-runs the registration
+      // flow and re-inserts a fresh device_token row.
+      if ((window as any).Capacitor?.isNativePlatform?.()) {
+        const r = await unregisterAllMyNativeDevicesAction();
+        if (r?.error) {
+          push({ title: "Couldn't disable", body: r.error, variant: "error" });
+          setState("on");
+          return;
+        }
+        push({
+          title: "Notifications off",
+          body: r?.deleted
+            ? `Removed ${r.deleted} device${r.deleted === 1 ? "" : "s"}.`
+            : "No active devices to remove.",
+          variant: "success",
+        });
+        setState("native-pending");
+        return;
+      }
+
+      // Web branch — original path, untouched.
       const reg = await navigator.serviceWorker.getRegistration("/");
       const sub = await reg?.pushManager.getSubscription();
       if (sub) {

@@ -73,3 +73,48 @@ export async function unregisterNativeDeviceTokenAction(
   if (error) return { error: error.message };
   return { success: true };
 }
+
+/**
+ * Delete EVERY native push subscription for the current user. Called by
+ * the "tap to disable" button in the native app since we don't have the
+ * device-specific token cached client-side (the token only exists in
+ * the registration callback at native bootstrap; we never round-trip it
+ * back to the page).
+ *
+ * Semantically this is "turn pushes off for me on every native device
+ * I've registered" — which is what the user expects when they tap
+ * disable. Re-enabling triggers PushNotifications.register() which
+ * inserts a fresh row, so no permanent state loss.
+ *
+ * Web push subscriptions are left alone — `removePushSubscriptionAction`
+ * (in actions.ts) handles those keyed by endpoint.
+ */
+export async function unregisterAllMyNativeDevicesAction(): Promise<{
+  error?: string;
+  success?: boolean;
+  deleted?: number;
+}> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me) return { error: "No profile." };
+
+  // Only delete the NATIVE rows (platform = 'ios' or 'android').
+  // Web push rows (platform = 'web') are managed separately via
+  // removePushSubscriptionAction so the user doesn't accidentally lose
+  // browser-side pushes when they disable on iPhone.
+  const { error, count } = await supabase
+    .from("push_subscriptions")
+    .delete({ count: "exact" })
+    .eq("user_id", me.id)
+    .in("platform", ["ios", "android"]);
+  if (error) return { error: error.message };
+  return { success: true, deleted: count ?? 0 };
+}
