@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { adminDeletePostAction } from "@/lib/feed/actions";
 import { useToast } from "@/components/ui/Toast";
+import { useFeedStateOptional } from "@/app/app/home/FeedStateClient";
 
 /**
  * Admin-only trash icon on every feed post. Soft-deletes the post via
@@ -13,6 +14,10 @@ export function AdminDeletePostButton({ postId }: { postId: string }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const { push } = useToast();
+  // Optional hook — see DeleteOwnPostButton for the rationale. When
+  // present (home feed surface), the deleted post drops out of the
+  // visible list the instant the server confirms.
+  const feedState = useFeedStateOptional();
 
   function go() {
     start(async () => {
@@ -21,6 +26,7 @@ export function AdminDeletePostButton({ postId }: { postId: string }) {
         push({ title: "Couldn't delete", body: r.error, variant: "error" });
         return;
       }
+      feedState?.removePost(postId);
       push({ title: "Post deleted", variant: "success" });
       setOpen(false);
     });

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { deleteOwnPostAction } from "@/lib/feed/actions";
 import { useToast } from "@/components/ui/Toast";
+import { useFeedStateOptional } from "@/app/app/home/FeedStateClient";
 
 /**
  * Author-only trash icon on a feed post the signed-in user wrote.
@@ -19,6 +20,11 @@ export function DeleteOwnPostButton({ postId }: { postId: string }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const { push } = useToast();
+  // Optional hook: present on the home feed surface (inside
+  // FeedStateProvider), null on any other route that renders a
+  // delete button outside the provider. When present, we remove the
+  // post from the live list the instant the server confirms.
+  const feedState = useFeedStateOptional();
 
   function go() {
     start(async () => {
@@ -27,6 +33,12 @@ export function DeleteOwnPostButton({ postId }: { postId: string }) {
         push({ title: "Couldn't delete", body: r.error, variant: "error" });
         return;
       }
+      // Optimistic removal — the deleted post disappears from the
+      // feed list immediately. Falls back gracefully (no-op) if this
+      // button is rendered outside a FeedStateProvider; the server
+      // action's revalidatePath still ensures the list updates on
+      // the next refresh.
+      feedState?.removePost(postId);
       push({ title: "Post deleted", variant: "success" });
       setOpen(false);
     });

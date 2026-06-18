@@ -57,6 +57,14 @@ type FeedStateContextValue = {
    * prepend with whatever the server actually wrote.
    */
   replacePosts: (posts: FeedPostShape[]) => void;
+  /**
+   * Optimistically remove a post by id. Called by DeleteOwnPostButton
+   * and AdminDeletePostButton after the server delete action returns
+   * success — so the deleted post disappears from the feed
+   * immediately instead of lingering until the next pull-to-refresh.
+   * Idempotent: removing an id that isn't in the list is a no-op.
+   */
+  removePost: (postId: string) => void;
 };
 
 const FeedStateContext = createContext<FeedStateContextValue | null>(null);
@@ -74,6 +82,18 @@ export function useFeedState(): FeedStateContextValue {
     );
   }
   return ctx;
+}
+
+/**
+ * Same as useFeedState, but returns null instead of throwing when
+ * rendered outside the provider. Use this from components that MAY
+ * render outside the home feed surface (e.g. delete buttons that
+ * appear in feed posts AND on a future post-detail route). When the
+ * caller gets null, it should fall back to relying on the server
+ * action's revalidatePath for state updates.
+ */
+export function useFeedStateOptional(): FeedStateContextValue | null {
+  return useContext(FeedStateContext);
 }
 
 // ---- Provider --------------------------------------------------------------
@@ -103,8 +123,15 @@ export function FeedStateProvider({
     setPosts(next);
   }, []);
 
+  const removePost = useCallback((postId: string) => {
+    // Filter out the row. Identity comparison on `id` — we never
+    // place two different post objects with the same id in this list
+    // (prependPost de-dupes), so a simple .filter is safe.
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+  }, []);
+
   return (
-    <FeedStateContext.Provider value={{ posts, prependPost, replacePosts }}>
+    <FeedStateContext.Provider value={{ posts, prependPost, replacePosts, removePost }}>
       {children}
     </FeedStateContext.Provider>
   );
