@@ -48,6 +48,47 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+    // MARK: - Remote notifications (APNs)
+    //
+    // These two callbacks are the ONLY way iOS returns a device token after
+    // PushNotifications.register() is called from JavaScript. Without them,
+    // the JS-side `registration` listener in `@capacitor/push-notifications`
+    // is never fired — the plugin observes the
+    // `.capacitorDidRegisterForRemoteNotifications` NotificationCenter post
+    // that we forward below. The default Capacitor AppDelegate template
+    // includes these; ours was missing them, which is why production push
+    // registration silently failed even after the aps-environment entitlement
+    // was flipped to `production` in 1.0.1.
+    //
+    // didRegister... posts the raw Data token; the plugin hex-encodes it and
+    // fires the "registration" listener in nativeClient.ts, which calls
+    // registerNativeDeviceTokenAction to persist the iOS row in
+    // push_subscriptions.
+    //
+    // didFailToRegister... posts the error; the plugin fires the
+    // "registrationError" listener in nativeClient.ts, which we log so a
+    // future regression here surfaces in console.
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications,
+            object: deviceToken
+        )
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications,
+            object: error
+        )
+    }
+
     /// Polls the window hierarchy looking for the Capacitor WKWebView. Applies
     /// the scroll/bounce lock the moment it appears. Bails after `remaining`
     /// attempts so we don't loop forever on a misconfigured build.
