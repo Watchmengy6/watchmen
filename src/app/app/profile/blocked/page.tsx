@@ -14,20 +14,23 @@ export default async function BlockedListPage() {
   const { profile } = await requireApproved();
   const supabase = supabaseServer();
 
+  // Use the SECURITY DEFINER RPC `get_my_blocked_profiles()` (migration
+  // 00039) instead of joining user_blocks → profiles directly. The
+  // direct join was always empty because the is_blocked_either_way RLS
+  // policy on profiles (correctly) hides blocked users from the
+  // blocker — so the joined `profiles` rows came back null and the
+  // page filtered every entry out. The RPC bypasses RLS only for the
+  // caller's own blocks (internal `where blocker_id =
+  // current_profile_id()`) so the data shown is still strictly
+  // ownership-scoped.
   const { data: rows } = await supabase
-    .from("user_blocks")
-    .select(
-      "id, created_at, blocked_id, blocked:profiles!user_blocks_blocked_id_fkey(id, full_name, profile_photo_url)",
-    )
-    .eq("blocker_id", profile.id)
-    .order("created_at", { ascending: false });
+    .rpc("get_my_blocked_profiles");
 
-  const items = (rows ?? [])
-    .map((r: any) => {
-      const b = Array.isArray(r.blocked) ? r.blocked[0] : r.blocked;
-      return b ? { id: b.id, full_name: b.full_name, profile_photo_url: b.profile_photo_url } : null;
-    })
-    .filter(Boolean) as { id: string; full_name: string; profile_photo_url: string | null }[];
+  const items = (rows ?? []).map((r: any) => ({
+    id: r.blocked_id as string,
+    full_name: r.full_name as string,
+    profile_photo_url: (r.profile_photo_url ?? null) as string | null,
+  }));
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
