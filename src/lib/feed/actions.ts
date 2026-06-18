@@ -289,12 +289,39 @@ export async function searchMembersForMention(
     .maybeSingle();
   if (!me || me.status !== "approved") return [];
 
+  // Bidirectional block filter for the mention picker. Without this,
+  // a member who blocked someone can still tag them in a new post —
+  // which both undoes the social contract of the block and creates
+  // a notification path back to the blocker. We call the SECURITY
+  // DEFINER RPC `get_my_blocked_usernames` (migration 00041) which
+  // bypasses RLS to see both sides of every block the caller is part
+  // of. The returned usernames are excluded from the profile query
+  // below.
+  const { data: blockedRows } = await (supabase as any).rpc(
+    "get_my_blocked_usernames",
+  );
+  const blockedUsernames: string[] = ((blockedRows ?? []) as { username: string }[])
+    .map((r) => r.username)
+    .filter(Boolean);
+
   let qb = supabase
     .from("profiles")
     .select("id, full_name, username")
     .eq("status", "approved")
     .neq("id", me.id)
     .not("username", "is", null);
+
+  if (blockedUsernames.length > 0) {
+    // PostgREST `in` filter wants a parenthesized list. We wrap each
+    // username in double quotes so handles with hyphens (the
+    // collision-suffix convention from migration 00035) don't break
+    // the parser.
+    qb = qb.not(
+      "username",
+      "in",
+      `(${blockedUsernames.map((u) => `"${u}"`).join(",")})`,
+    );
+  }
 
   if (q.length > 0) {
     // Members type a person's NAME after "@", not their handle — so match
@@ -345,14 +372,33 @@ export async function listMentionableMembers(): Promise<
     .maybeSingle();
   if (!me || me.status !== "approved") return [];
 
-  const { data, error } = await supabase
+  // Same bidirectional block filter as searchMembersForMention —
+  // FeedComposer loads this list once when it opens and filters
+  // client-side as the user types, so the block exclusion must
+  // happen here before the list is shipped to the client.
+  const { data: blockedRows } = await (supabase as any).rpc(
+    "get_my_blocked_usernames",
+  );
+  const blockedUsernames: string[] = ((blockedRows ?? []) as { username: string }[])
+    .map((r) => r.username)
+    .filter(Boolean);
+
+  let qb = supabase
     .from("profiles")
     .select("id, full_name, username")
     .eq("status", "approved")
     .neq("id", me.id)
-    .not("username", "is", null)
-    .order("full_name")
-    .limit(500);
+    .not("username", "is", null);
+
+  if (blockedUsernames.length > 0) {
+    qb = qb.not(
+      "username",
+      "in",
+      `(${blockedUsernames.map((u) => `"${u}"`).join(",")})`,
+    );
+  }
+
+  const { data, error } = await qb.order("full_name").limit(500);
   if (error) {
     console.error("[listMentionableMembers] query failed", error);
     return [];
