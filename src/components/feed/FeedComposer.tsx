@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { uploadMedia } from "@/lib/uploads/client";
@@ -73,7 +72,12 @@ export function FeedComposer({
   // options — members can add up to 4 total via the + button below.
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
-  const router = useRouter();
+  // router.refresh() was removed in Phase 3 of the optimistic-prepend
+  // refactor. The caller's `onSubmit` is now responsible for updating
+  // whatever feed state is visible to the user (e.g. HomeFeedComposer
+  // prepends the new post via useFeedState().prependPost). Keeping the
+  // router.refresh() here would defeat the purpose by triggering the
+  // very full-route refetch we're trying to avoid.
   const taggedGroup = taggedGroupId
     ? taggableGroups.find((g) => g.id === taggedGroupId)
     : null;
@@ -229,8 +233,11 @@ export function FeedComposer({
         setErr(result.error);
         return;
       }
+      // Phase 3: composer just resets itself on success. The caller's
+      // onSubmit handler is responsible for whatever happens to the
+      // feed list — typically an optimistic prepend via the
+      // FeedStateProvider on /app/home.
       reset();
-      router.refresh();
     });
   }
 

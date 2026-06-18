@@ -19,9 +19,26 @@ import { useRouter } from "next/navigation";
 export function PullToRefresh({
   children,
   threshold = 70,
+  onRefresh,
 }: {
   children: React.ReactNode;
   threshold?: number;
+  /**
+   * Optional async callback fired when the pull threshold is crossed.
+   * When provided, it REPLACES the default `router.refresh()`
+   * behavior — used on /app/home so PullToRefresh can call
+   * `getFeedSliceAction()` + `replacePosts(...)` instead of forcing a
+   * full route refetch (next-event banner, birthdays, joined groups,
+   * etc.).
+   *
+   * When omitted, falls back to `router.refresh()` so existing
+   * callers keep working unchanged.
+   *
+   * The callback is awaited so the spinner stays visible until the
+   * refresh actually completes; the 500ms minimum-hold below
+   * applies on top of whatever the callback's latency is.
+   */
+  onRefresh?: () => Promise<void> | void;
 }) {
   const router = useRouter();
   const [pullDistance, setPullDistance] = useState(0);
@@ -34,11 +51,21 @@ export function PullToRefresh({
   const pullDistanceRef = useRef(0);
   const refreshingRef = useRef(false);
   const thresholdRef = useRef(threshold);
+  // onRefreshRef lets the long-lived touchend handler call the LATEST
+  // onRefresh prop without rebinding the document listeners every time
+  // the parent re-renders. Caller is expected to pass a stable
+  // callback (e.g. useCallback) but the ref pattern is forgiving.
+  const onRefreshRef = useRef(onRefresh);
 
   // Keep the threshold ref in sync with prop changes (rare).
   useEffect(() => {
     thresholdRef.current = threshold;
   }, [threshold]);
+
+  // Keep the onRefresh ref in sync — same pattern as threshold.
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
 
   useEffect(() => {
     // Local setters that update both ref + state without re-creating handlers.
@@ -80,9 +107,18 @@ export function PullToRefresh({
         updateRefreshing(true);
         updatePull(thresholdRef.current);
         try {
-          router.refresh();
+          // Prefer the caller's onRefresh callback when provided — on
+          // /app/home it calls getFeedSliceAction + replacePosts so we
+          // skip the full route refetch. Falls back to router.refresh()
+          // for any other surface that just wants the legacy behavior.
+          const customRefresh = onRefreshRef.current;
+          if (customRefresh) {
+            await customRefresh();
+          } else {
+            router.refresh();
+          }
           // Hold the spinner ~500ms so users feel the refresh; the RSC
-          // payload usually lands well within that.
+          // payload (or the slice action) usually lands well within that.
           await new Promise((r) => setTimeout(r, 500));
         } finally {
           updateRefreshing(false);

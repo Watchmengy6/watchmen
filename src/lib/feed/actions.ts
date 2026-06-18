@@ -627,12 +627,17 @@ export async function createPostAction(
   // to learn "this brand new post has 0 of everything."
   const shaped = mapToFeedPostShape(post, null);
 
-  // We KEEP revalidatePath here as a safety net during the Phase 2/3
-  // rollout — callers that haven't migrated to optimistic prepend yet
-  // (e.g. preview routes, embedded surfaces) still get a working
-  // refresh. Once every caller uses `post` for prepend, this line
-  // becomes dead weight and can be removed in a separate cleanup.
-  revalidatePath("/app/home");
+  // Phase 3: revalidatePath("/app/home") removed. The home page now
+  // uses HomeFeedComposer + FeedStateProvider — the new post is
+  // prepended client-side via prependPost(shaped) the moment this
+  // action returns. Forcing a route revalidation here would re-run
+  // the six parallel queries on /app/home (next event, birthdays,
+  // joined groups, etc.) for zero benefit, defeating the whole point
+  // of the optimistic-prepend refactor.
+  //
+  // If a non-home surface ever consumes createPostAction without
+  // managing its own state, that surface is responsible for its own
+  // refresh (e.g. router.refresh() in its handler).
   return { postId: post.id, post: shaped };
 }
 

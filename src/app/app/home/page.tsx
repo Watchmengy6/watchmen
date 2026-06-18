@@ -1,17 +1,25 @@
 import Link from "next/link";
 import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
-import { FeedComposer } from "@/components/feed/FeedComposer";
-// FeedPostClient is now consumed inside <FeedList> rather than mapped
-// inline here, so the direct import was removed in Phase 2 to avoid an
-// unused-import build error.
-import { FeedStateProvider, FeedList } from "./FeedStateClient";
-import { PullToRefresh } from "@/components/feed/PullToRefresh";
+// FeedComposer and PullToRefresh now consumed via the home-page
+// wrappers HomeFeedComposer + HomePullToRefresh which hook into
+// FeedStateContext for optimistic prepend / targeted refetch. Direct
+// imports removed to avoid unused-import build errors.
+//
+// createPostAction is still imported by FeedStateClient (called from
+// HomeFeedComposer's onSubmit) — not needed here in page.tsx anymore.
+//
+// FeedPostClient is consumed inside <FeedList>; not referenced here.
+import {
+  FeedStateProvider,
+  FeedList,
+  HomeFeedComposer,
+  HomePullToRefresh,
+} from "./FeedStateClient";
 import { Logo } from "@/components/brand/Logo";
 import { AdminPill } from "@/components/admin/AdminPill";
 import { fmtTime } from "@/lib/utils/date";
 import { localTodayISO, parseLocalDate } from "@/lib/utils/localDate";
-import { createPostAction } from "@/lib/feed/actions";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
 import {
   POSTS_QUERY_SELECT,
@@ -187,13 +195,14 @@ export default async function HomePage() {
   const mentionable: { id: string; full_name: string; username: string }[] = [];
 
   return (
-    <PullToRefresh>
-    {/* FeedStateProvider holds the post list in client state so a new
-        post can be optimistically prepended (Phase 3) without bouncing
-        through router.refresh() and refetching the entire /app/home
-        route. Phase 2 just initializes from the server-rendered feed —
-        no behavior change visible yet. */}
+    /* FeedStateProvider wraps the whole feed surface so BOTH
+       HomePullToRefresh (which calls replacePosts on pull) AND
+       HomeFeedComposer (which calls prependPost on submit) can
+       consume the same context. Provider position is critical:
+       must be OUTSIDE HomePullToRefresh for the pull-to-refresh
+       wrapper to use the hook. */
     <FeedStateProvider initialPosts={feed}>
+    <HomePullToRefresh>
     <div className="min-h-[100dvh] bg-ink-900 pb-28 relative">
       {/* sticky top bar */}
       <div
@@ -344,13 +353,15 @@ export default async function HomePage() {
           </Link>
         ) : null}
 
-        {/* Composer */}
-        <FeedComposer
+        {/* Composer — uses HomeFeedComposer wrapper which intercepts
+            the submit, calls createPostAction directly, and prepends
+            the returned post into FeedStateContext for instant UI
+            update. No router.refresh() = no full /app/home refetch. */}
+        <HomeFeedComposer
           meName={profile.full_name}
           meAvatarUrl={profile.profile_photo_url}
           mentionablePeople={mentionable}
           taggableGroups={taggableGroups}
-          onSubmit={createPostAction}
         />
 
         {/* Feed — list rendered from client state via FeedStateProvider.
@@ -377,7 +388,7 @@ export default async function HomePage() {
         </p>
       </div>
     </div>
+    </HomePullToRefresh>
     </FeedStateProvider>
-    </PullToRefresh>
   );
 }

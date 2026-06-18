@@ -34,6 +34,9 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
 import { FeedPostClient } from "./FeedPostClient";
+import { FeedComposer, type FeedComposerProps } from "@/components/feed/FeedComposer";
+import { PullToRefresh } from "@/components/feed/PullToRefresh";
+import { createPostAction, getFeedSliceAction } from "@/lib/feed/actions";
 
 // ---- Context ---------------------------------------------------------------
 
@@ -156,5 +159,75 @@ export function FeedList({ postProps }: { postProps: FeedListPostProps }) {
         />
       ))}
     </>
+  );
+}
+
+// ---- Phase 3 consumers -----------------------------------------------------
+
+/**
+ * Home-page wrapper around <FeedComposer> that intercepts the submit
+ * to (1) call createPostAction directly, (2) optimistically prepend
+ * the returned post to the feed via FeedStateContext. Result: a new
+ * post appears at the top of the list instantly — no router.refresh()
+ * round-trip, no full /app/home re-render.
+ *
+ * Accepts the same props as FeedComposer EXCEPT `onSubmit` (we own
+ * that now). The composer's own state (text, type, media, polls)
+ * still resets via FeedComposer's internal logic; we just hand the
+ * server result into FeedStateContext.
+ */
+export function HomeFeedComposer(props: Omit<FeedComposerProps, "onSubmit">) {
+  const { prependPost } = useFeedState();
+
+  return (
+    <FeedComposer
+      {...props}
+      onSubmit={async (formData) => {
+        const r = await createPostAction(formData);
+        if (r?.error) {
+          return { error: r.error };
+        }
+        if (r?.post) {
+          prependPost(r.post);
+        }
+        // FeedComposer treats absence of `error` as success — return
+        // nothing so it resets its own state. The prepend above
+        // already placed the new post in the visible feed.
+        return undefined;
+      }}
+    />
+  );
+}
+
+/**
+ * Home-page wrapper around <PullToRefresh> that swaps the default
+ * router.refresh() for a targeted feed-slice refetch:
+ *   1. Call getFeedSliceAction() — returns just { posts } (no
+ *      next-event banner, no birthdays, no joined groups refetch)
+ *   2. Replace the post list in FeedStateContext with the fresh slice
+ *
+ * Net effect: pull-to-refresh syncs the feed without forcing the
+ * server component to re-fetch its other six parallel queries. Same
+ * UX as before; an order of magnitude less data over the wire.
+ *
+ * If getFeedSliceAction errors, we silently swallow it — the
+ * existing feed stays on screen. Better than flashing an empty list
+ * on a transient network hiccup; a hard refresh from the user is
+ * always available as the recovery path.
+ */
+export function HomePullToRefresh({ children }: { children: ReactNode }) {
+  const { replacePosts } = useFeedState();
+
+  return (
+    <PullToRefresh
+      onRefresh={async () => {
+        const r = await getFeedSliceAction();
+        if (r?.posts) {
+          replacePosts(r.posts);
+        }
+      }}
+    >
+      {children}
+    </PullToRefresh>
   );
 }
