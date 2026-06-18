@@ -2,7 +2,10 @@ import Link from "next/link";
 import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { FeedComposer } from "@/components/feed/FeedComposer";
-import { FeedPostClient } from "./FeedPostClient";
+// FeedPostClient is now consumed inside <FeedList> rather than mapped
+// inline here, so the direct import was removed in Phase 2 to avoid an
+// unused-import build error.
+import { FeedStateProvider, FeedList } from "./FeedStateClient";
 import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { Logo } from "@/components/brand/Logo";
 import { AdminPill } from "@/components/admin/AdminPill";
@@ -185,6 +188,12 @@ export default async function HomePage() {
 
   return (
     <PullToRefresh>
+    {/* FeedStateProvider holds the post list in client state so a new
+        post can be optimistically prepended (Phase 3) without bouncing
+        through router.refresh() and refetching the entire /app/home
+        route. Phase 2 just initializes from the server-rendered feed —
+        no behavior change visible yet. */}
+    <FeedStateProvider initialPosts={feed}>
     <div className="min-h-[100dvh] bg-ink-900 pb-28 relative">
       {/* sticky top bar */}
       <div
@@ -344,26 +353,23 @@ export default async function HomePage() {
           onSubmit={createPostAction}
         />
 
-        {/* Feed */}
+        {/* Feed — list rendered from client state via FeedStateProvider.
+            Empty-state copy lives inside <FeedList>, so the conditional
+            is gone. The per-post props (viewer identity, mentionable
+            members, blocked usernames, admin flag) are bundled into
+            `postProps` and threaded once. Phase 3 will let FeedComposer
+            prepend optimistically through the same provider. */}
         <div className="space-y-3">
-          {feed.length === 0 ? (
-            <div className="text-center text-ink-300 text-sm py-10">
-              No posts yet. Be the first to share something with the room.
-            </div>
-          ) : (
-            feed.map((post) => (
-              <FeedPostClient
-                key={post.id}
-                post={post}
-                meName={profile.full_name}
-                meAvatar={profile.profile_photo_url}
-                mentionablePeople={mentionable}
-                blockedUsernames={blockedUsernames}
-                isAdmin={isAdmin}
-                viewerProfileId={profile.id}
-              />
-            ))
-          )}
+          <FeedList
+            postProps={{
+              meName: profile.full_name,
+              meAvatar: profile.profile_photo_url,
+              mentionablePeople: mentionable,
+              blockedUsernames,
+              isAdmin,
+              viewerProfileId: profile.id,
+            }}
+          />
         </div>
 
         <p className="text-center text-[11px] text-ink-400 py-4">
@@ -371,6 +377,7 @@ export default async function HomePage() {
         </p>
       </div>
     </div>
+    </FeedStateProvider>
     </PullToRefresh>
   );
 }
