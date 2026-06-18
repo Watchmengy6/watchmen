@@ -36,6 +36,7 @@ export default async function HomePage() {
     { data: joinedGroups },
     postsRes,
     birthdayRes,
+    blockedUsernamesRes,
   ] = await Promise.all([
     supabase
       .from("events")
@@ -86,12 +87,28 @@ export default async function HomePage() {
     // this Promise.all so it overlaps with the other queries; previously
     // it stacked an extra serial round trip onto first-byte time.
     supabase.rpc("birthdays_today"),
+    // Blocked usernames (bidirectional). Folded into this Promise.all so
+    // we don't add a serial roundtrip just to render mentions. Used by
+    // FeedPost → RichText to dim @-mentions of blocked users instead of
+    // rendering them as clickable chips that link to an empty member
+    // search. Migration 00041 added the get_my_blocked_usernames() RPC.
+    (supabase as any).rpc("get_my_blocked_usernames"),
   ]);
   const pendingCount = pendingRes.count ?? 0;
   const posts = postsRes.data;
   if (postsRes.error) console.error("[/app/home] posts query failed", postsRes.error);
   const birthdaysToday: { id: string; full_name: string; profile_photo_url: string | null }[] =
     (birthdayRes.data ?? []) as any[];
+  // Flatten the RPC rows `[{username:'aaron'}, ...]` to a plain string
+  // array that <RichText> can do constant-time `.has()` checks against.
+  // Already lowercased server-side via the username convention but the
+  // client also lowercases for safety. Returns [] when there are no
+  // blocks (or on RPC error) so the prop is always a valid array.
+  const blockedUsernames: string[] = (
+    (blockedUsernamesRes as { data?: { username: string }[] | null })?.data ?? []
+  )
+    .map((r) => r.username)
+    .filter(Boolean);
 
   // Fire-and-forget book the auto-post for each birthday member. The RPC
   // is idempotent (unique on member_id + posted_for_date), so multiple
@@ -415,6 +432,7 @@ export default async function HomePage() {
                 meName={profile.full_name}
                 meAvatar={profile.profile_photo_url}
                 mentionablePeople={mentionable}
+                blockedUsernames={blockedUsernames}
                 isAdmin={isAdmin}
                 viewerProfileId={profile.id}
               />

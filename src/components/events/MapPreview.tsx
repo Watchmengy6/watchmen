@@ -1,4 +1,10 @@
-// Placeholder map preview. Replace with Google Maps API once a key is provisioned.
+// Map "preview" card — by design this is a tappable card that deep-links
+// into the user's native Maps app (Apple Maps on iOS, falls back to
+// Google Maps via maps.apple.com's `?q=` redirect on Android/web). We
+// intentionally don't render a real map tile image — that would require
+// a paid map provider API key and a server-side tile proxy. The card
+// shows the venue label + address/coordinates and opens Maps on tap,
+// which is the only behavior the event detail page needs.
 export function MapPreview({
   lat,
   lng,

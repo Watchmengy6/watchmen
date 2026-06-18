@@ -101,6 +101,14 @@ export interface FeedPostProps {
   meAvatar?: string | null;
   /** Members the user can @mention in a comment. */
   mentionablePeople?: { id: string; full_name: string; username: string }[];
+  /**
+   * Lowercased usernames the viewer has bidirectionally blocked.
+   * Passed down to <RichText> so historic @-mentions of blocked users
+   * render as inert plain text instead of a clickable chip that would
+   * deep-link to an empty member-search route. Fetched once per page
+   * via `get_my_blocked_usernames()` RPC (migration 00041).
+   */
+  blockedUsernames?: string[];
   /** When true, render the admin trash icon on the action bar. */
   isAdmin?: boolean;
   /** Signed-in viewer's profile id — used to render the author self-delete button. */
@@ -114,6 +122,7 @@ export function FeedPost({
   meName,
   meAvatar,
   mentionablePeople = [],
+  blockedUsernames,
   isAdmin = false,
   viewerProfileId,
 }: FeedPostProps) {
@@ -336,7 +345,7 @@ export function FeedPost({
             className="px-4 pt-3 text-[15px] text-ink-100 leading-relaxed whitespace-pre-wrap break-words"
             style={{ overflowWrap: "anywhere" }}
           >
-            <RichText text={post.body} />
+            <RichText text={post.body} blockedUsernames={blockedUsernames} />
           </div>
         ) : null}
 
@@ -501,7 +510,7 @@ export function FeedPost({
                       className="text-[14px] text-ink-100 leading-snug mt-0.5 whitespace-pre-wrap break-words"
                       style={{ overflowWrap: "anywhere" }}
                     >
-                      <RichText text={c.body} />
+                      <RichText text={c.body} blockedUsernames={blockedUsernames} />
                     </div>
                     <div className="text-[10.5px] text-ink-400 mt-1">
                       {relativeTime(c.created_at)}

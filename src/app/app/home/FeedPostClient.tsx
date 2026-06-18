@@ -8,6 +8,10 @@ interface Props {
   meName: string;
   meAvatar?: string | null;
   mentionablePeople?: { id: string; full_name: string; username: string }[];
+  /** Lowercased usernames the viewer has bidirectionally blocked —
+      forwarded to FeedPost → RichText so historic @-mentions of
+      blocked users render as inert plain text. */
+  blockedUsernames?: string[];
   isAdmin?: boolean;
   /** Signed-in viewer's profile id, so FeedPost can render the author
       self-delete button on posts the viewer wrote. */
@@ -24,6 +28,7 @@ export function FeedPostClient({
   meName,
   meAvatar,
   mentionablePeople = [],
+  blockedUsernames,
   isAdmin = false,
   viewerProfileId,
 }: Props) {
@@ -33,6 +38,7 @@ export function FeedPostClient({
       meName={meName}
       meAvatar={meAvatar}
       mentionablePeople={mentionablePeople}
+      blockedUsernames={blockedUsernames}
       isAdmin={isAdmin}
       viewerProfileId={viewerProfileId}
       onToggleLike={async (postId, nextLiked) => {
