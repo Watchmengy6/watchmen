@@ -11,7 +11,10 @@ export const dynamic = "force-dynamic";
  * Lets a member see who they've blocked and unblock them.
  */
 export default async function BlockedListPage() {
-  const { profile } = await requireApproved();
+  // requireApproved() still gates access (must be approved member) —
+  // we don't need the profile object here because the RPC scopes itself
+  // to the caller internally via current_profile_id().
+  await requireApproved();
   const supabase = supabaseServer();
 
   // Use the SECURITY DEFINER RPC `get_my_blocked_profiles()` (migration
@@ -23,14 +26,25 @@ export default async function BlockedListPage() {
   // caller's own blocks (internal `where blocker_id =
   // current_profile_id()`) so the data shown is still strictly
   // ownership-scoped.
-  const { data: rows } = await supabase
-    .rpc("get_my_blocked_profiles");
+  //
+  // Cast to any here because the generated database.ts types were
+  // produced before this migration was added; regenerating them is on
+  // the v1.1 punch list. Once that's done, replace with a proper
+  // typed call.
+  const { data: rows } = await (supabase as any).rpc("get_my_blocked_profiles");
 
-  const items = (rows ?? []).map((r: any) => ({
-    id: r.blocked_id as string,
-    full_name: r.full_name as string,
-    profile_photo_url: (r.profile_photo_url ?? null) as string | null,
-  }));
+  type BlockedRow = {
+    blocked_id: string;
+    full_name: string;
+    profile_photo_url: string | null;
+  };
+
+  const items: { id: string; full_name: string; profile_photo_url: string | null }[] =
+    ((rows ?? []) as BlockedRow[]).map((r) => ({
+      id: r.blocked_id,
+      full_name: r.full_name,
+      profile_photo_url: r.profile_photo_url ?? null,
+    }));
 
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
