@@ -355,7 +355,10 @@ export async function searchMembersForMention(
     return [];
   }
 
-  return (data ?? []).filter((r) => r.username) as {
+  // `r` is typed any because `qb` was cast to any above (TS depth-limit
+  // workaround for the chained PostgrestFilterBuilder). The shape we
+  // care about is asserted via the final `as ...` cast on the array.
+  return (data ?? []).filter((r: any) => r.username) as {
     id: string;
     full_name: string;
     username: string;
@@ -419,7 +422,10 @@ export async function listMentionableMembers(): Promise<
     console.error("[listMentionableMembers] query failed", error);
     return [];
   }
-  return (data ?? []).filter((r) => r.username) as {
+  // `r` is typed any because `qb` was cast to any above (TS depth-limit
+  // workaround for the chained PostgrestFilterBuilder). The shape we
+  // care about is asserted via the final `as ...` cast on the array.
+  return (data ?? []).filter((r: any) => r.username) as {
     id: string;
     full_name: string;
     username: string;
