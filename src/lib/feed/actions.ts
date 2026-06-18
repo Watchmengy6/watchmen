@@ -310,7 +310,13 @@ export async function searchMembersForMention(
     .map((r) => r.username)
     .filter(Boolean);
 
-  let qb = supabase
+  // Typed as `any` because chaining .not(...) after .neq(...).not(...) on
+  // PostgrestFilterBuilder makes TypeScript instantiate an excessively
+  // deep type union ("Type instantiation is excessively deep and
+  // possibly infinite"). The runtime behavior is identical — we just
+  // opt out of the deep type narrowing for this builder chain. The
+  // .then() result is still narrowed via the destructure below.
+  let qb: any = supabase
     .from("profiles")
     .select("id, full_name, username")
     .eq("status", "approved")
@@ -389,7 +395,11 @@ export async function listMentionableMembers(): Promise<
     .map((r) => r.username)
     .filter(Boolean);
 
-  let qb = supabase
+  // See searchMembersForMention above for why this is typed `any` —
+  // chained .not(...) after .neq(...).not(...) explodes the
+  // PostgrestFilterBuilder generic types past TypeScript's depth
+  // limit. Runtime behavior is identical.
+  let qb: any = supabase
     .from("profiles")
     .select("id, full_name, username")
     .eq("status", "approved")
