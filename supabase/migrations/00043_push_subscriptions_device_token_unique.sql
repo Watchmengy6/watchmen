@@ -1,0 +1,44 @@
+-- ===========================================================
+-- 00043 — push_subscriptions: unique index on device_token
+-- ===========================================================
+--
+-- Found via the live PushDiagOverlay trace on iPhone in 1.0.2:
+--   listener: server action ERROR: there is no unique or exclusion
+--   constraint matching the ON CONFLICT specification
+--
+-- registerNativeDeviceTokenAction (src/lib/push/native.ts) uses:
+--   .upsert({...}, { onConflict: "device_token" })
+--
+-- For Postgres to support `ON CONFLICT (device_token)`, there has to
+-- be a UNIQUE constraint or UNIQUE INDEX on that column. The table
+-- (created in migration 00014, with device_token added in 00032) has
+-- NEITHER. So every native registration attempt fails the upsert and
+-- no `platform='ios'` row is ever written — even though APNs is
+-- correctly returning a token and the AppDelegate (fixed in 1.0.2)
+-- is correctly forwarding it to the Capacitor plugin.
+--
+-- The Codex pre-1.0.2 audit flagged the upsert path as fragile and
+-- recommended adding an UPDATE policy (migration 00042) so the
+-- conflict branch could mutate. That was true but it wasn't the
+-- root cause — UPDATE policy doesn't help if Postgres never reaches
+-- the UPDATE branch because ON CONFLICT itself fails at parse time
+-- for lack of a matching constraint. 00042 is still correct as a
+-- belt-and-suspenders so this isn't being reverted.
+--
+-- Why a unique index (and not a unique constraint):
+--   - Same effect for ON CONFLICT resolution
+--   - Index is more flexible if we want partial uniqueness later
+--     (e.g. device_token unique only within ios/android, but
+--      multiple null device_tokens allowed for web subscriptions)
+--
+-- Why no WHERE clause:
+--   - Postgres treats NULL as DISTINCT in unique indexes by default.
+--   - Existing web push subscriptions all have NULL device_token,
+--     so they don't conflict with each other.
+--   - Native rows (ios/android) populate device_token with a real
+--     APNs/FCM token string, so uniqueness applies to them only.
+--   - Net: web subs unaffected; native subs get the uniqueness they
+--     need for the action's upsert to work.
+
+create unique index if not exists push_subscriptions_device_token_uniq
+  on public.push_subscriptions (device_token);
