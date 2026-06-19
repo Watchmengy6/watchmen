@@ -2,7 +2,6 @@ import { requireApproved } from "@/lib/auth/gates";
 import { BottomNav } from "@/components/nav/BottomNav";
 import { PushReceiver } from "@/components/push/PushReceiver";
 import { NativePushRegistrar } from "@/components/push/NativePushRegistrar";
-import { PushDiagOverlay } from "@/components/push/PushDiagOverlay";
 import { DisclaimerGate } from "@/components/account/DisclaimerGate";
 
 export const dynamic = "force-dynamic";
@@ -22,11 +21,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Native (Capacitor) push registrar — asks for permission and
           stores the APNs/FCM device token. No-op on plain web. */}
       <NativePushRegistrar />
-      {/* TEMPORARY: on-screen diagnostic overlay for the 1.0.2 push
-          debug session. Off by default. Enable on a device with
-          /app/home?pushdiag=1, disable with /app/home?pushdiag=0.
-          Remove after push is confirmed working end-to-end. */}
-      <PushDiagOverlay />
       {/* main has NO horizontal padding so pages can fully control their own
           inset (and use full width for sticky headers / hero cards). Pages
           should add px-4 or px-5 to their content as needed. */}

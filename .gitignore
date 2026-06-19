@@ -31,3 +31,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 MARKETING_SITE_REBUILD_PROMPT.md
+
+# Apple .p8 APNs auth keys — secret, never commit
+*.p8
+AuthKey_*.p8
