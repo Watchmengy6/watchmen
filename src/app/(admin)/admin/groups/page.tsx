@@ -81,7 +81,7 @@ export default async function AdminGroupsPage() {
                   {g.category ? <Badge variant="muted">{g.category}</Badge> : null}
                 </div>
                 <Link
-                  href={`/app/groups/${g.slug}`}
+                  href={`/app/groups/${g.id}`}
                   className="block mt-1.5 font-semibold truncate"
                 >
                   {g.name}
