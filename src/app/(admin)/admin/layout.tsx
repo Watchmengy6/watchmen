@@ -8,6 +8,7 @@ const tabs = [
   { href: "/admin/pending", label: "Pending" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/events", label: "Events" },
+  { href: "/admin/groups", label: "Groups" },
   { href: "/admin/leaderboard", label: "Leaderboard" },
   { href: "/admin/settings", label: "Settings" },
 ];

@@ -115,3 +115,28 @@ export async function deleteEventAction(eventId: string) {
   revalidatePath("/app/events");
   return { success: true };
 }
+
+/**
+ * Delete a group entirely (admin/super_admin only).
+ *
+ * FK cascades handle the cleanup automatically:
+ *   - group_members: ON DELETE CASCADE (migration 00008)
+ *   - threads (group chat) → thread_members + thread_messages: ON DELETE CASCADE
+ *   - posts.tagged_group_id: ON DELETE SET NULL — group-tagged posts survive,
+ *     they just lose the tag.
+ *
+ * RLS DELETE policy "groups admin/owner delete" (migration 00009) already
+ * permits both admin and super_admin via public.is_admin(), so we don't need
+ * a service-role client — the admin's own session is enough.
+ */
+export async function deleteGroupAction(groupId: string) {
+  const { error, supabase } = await ensureAdmin();
+  if (error) return { error };
+  const { error: dErr } = await supabase.from("groups").delete().eq("id", groupId);
+  if (dErr) return { error: dErr.message };
+  revalidatePath("/admin/groups");
+  revalidatePath("/app/groups");
+  // The group's chat thread is gone too — invalidate the chats list.
+  revalidatePath("/app/chats");
+  return { success: true };
+}
