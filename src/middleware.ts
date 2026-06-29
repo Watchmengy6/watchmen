@@ -87,7 +87,15 @@ export async function middleware(request: NextRequest) {
 
   // Anything under /app or /admin requires auth + status check.
   if (pathname.startsWith("/app") || pathname.startsWith("/admin")) {
-    if (!user) return NextResponse.redirect(new URL("/login", request.url));
+    if (!user) {
+      // Preserve the intended destination so login can bounce the user
+      // back to it — e.g. a shared /app/events/<id> link opened in the
+      // browser shouldn't dump them on the feed after signing in.
+      const loginUrl = new URL("/login", request.url);
+      const dest = pathname + (request.nextUrl.search || "");
+      if (dest && dest !== "/app/home") loginUrl.searchParams.set("next", dest);
+      return NextResponse.redirect(loginUrl);
+    }
 
     const { data: profile } = await supabase
       .from("profiles")

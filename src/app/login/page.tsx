@@ -4,7 +4,15 @@ import { Logo } from "@/components/brand/Logo";
 
 export const metadata = { title: "Sign in · The Watchmen" };
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
+  // Only honor internal paths (guards against open-redirect via ?next=).
+  const nextRaw = searchParams?.next ?? "";
+  const next =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : undefined;
   return (
     <main className="min-h-[100dvh] flex flex-col px-6 safe-top safe-bottom">
       <div className="pt-6">
@@ -25,7 +33,7 @@ export default function LoginPage() {
           Sign in to the private network.
         </p>
         <div className="mt-8">
-          <LoginForm />
+          <LoginForm next={next} />
         </div>
         <div className="mt-8 text-center text-sm text-ink-300">
           Have an invite link? Open it to sign up — admin will approve you.

@@ -9,6 +9,15 @@ import { sendPushToAdmins } from "@/lib/push/send";
 export async function loginAction(_prev: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  // Where to land after login. Only internal paths are honored (no
+  // open-redirect), and never bounce back to /login itself.
+  const nextRaw = String(formData.get("next") ?? "");
+  const next =
+    nextRaw.startsWith("/") &&
+    !nextRaw.startsWith("//") &&
+    !nextRaw.startsWith("/login")
+      ? nextRaw
+      : "/app/home";
   if (!email || !password) return { error: "Email and password are required." };
 
   const supabase = supabaseServer();
@@ -27,7 +36,7 @@ export async function loginAction(_prev: unknown, formData: FormData) {
     .maybeSingle();
 
   if (!profile || profile.status !== "approved") redirect("/pending");
-  redirect("/app/home");
+  redirect(next);
 }
 
 export async function signupAction(_prev: unknown, formData: FormData) {
