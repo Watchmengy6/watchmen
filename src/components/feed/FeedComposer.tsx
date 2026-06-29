@@ -175,7 +175,9 @@ export function FeedComposer({
     if (!file) return;
     setUploading(true);
     setErr(null);
-    const result = await uploadMedia(file);
+    // Feed photos are auto-fit to a square so the feed stays uniform.
+    // (uploadMedia only applies the crop to images; videos pass through.)
+    const result = await uploadMedia(file, { aspect: { w: 1, h: 1 } });
     setUploading(false);
     if ("error" in result) {
       setErr(result.error);

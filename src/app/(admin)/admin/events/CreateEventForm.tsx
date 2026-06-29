@@ -7,6 +7,7 @@ import { Input, Label, Textarea } from "@/components/ui/Input";
 import { createEventAction } from "@/lib/events/actions";
 import { useToast } from "@/components/ui/Toast";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { processImageFile } from "@/lib/uploads/client";
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -40,11 +41,14 @@ export function CreateEventForm() {
       setUploading(false);
       return;
     }
-    const ext = file.name.split(".").pop() || "jpg";
+    // Event banners render wide — crop to 16:9 so the image fits every
+    // event card (and downscale) before upload.
+    const processed = await processImageFile(file, { aspect: { w: 16, h: 9 } });
+    const ext = processed.type === "image/jpeg" ? "jpg" : file.name.split(".").pop() || "jpg";
     const path = `${user.id}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage
       .from("event-images")
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, processed, { contentType: processed.type, upsert: false });
     if (error) {
       push({ title: "Upload failed", body: error.message, variant: "error" });
       setUploading(false);

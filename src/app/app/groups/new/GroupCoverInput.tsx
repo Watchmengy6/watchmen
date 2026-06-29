@@ -22,7 +22,8 @@ export function GroupCoverInput() {
     }
     setErr(null);
     setUploading(true);
-    const result = await uploadMedia(file);
+    // Group covers render as squares on the groups grid — crop to 1:1.
+    const result = await uploadMedia(file, { aspect: { w: 1, h: 1 } });
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";
     if ("error" in result) {

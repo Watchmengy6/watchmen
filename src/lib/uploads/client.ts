@@ -13,34 +13,81 @@ import { createBrowserClient } from "@supabase/ssr";
  * photo drops to ~200–500 KB after this pass, which means faster sends,
  * less storage, less bandwidth on every feed render.
  */
-async function resizeImageFile(
+export interface ImageAspect {
+  w: number;
+  h: number;
+}
+
+/**
+ * Decode an image, optionally CENTER-CROP it to a target aspect ratio,
+ * downscale to fit `maxEdge` on the longest side, and re-encode as JPEG.
+ *
+ * The aspect crop is how event/group/post images "fit perfectly" no matter
+ * what the uploader picked — we crop to the exact ratio the card renders at
+ * so there's never letterboxing or an awkward off-ratio crop. Center-crop
+ * keeps the middle of the image (where the subject usually is).
+ *
+ * Falls back to the original file on any failure (offline, HEIC, decode
+ * error) so an upload is never blocked by this step.
+ */
+export async function processImageFile(
   file: File,
-  maxEdge = 1600,
-  quality = 0.85,
+  opts: { aspect?: ImageAspect; maxEdge?: number; quality?: number } = {},
 ): Promise<File> {
-  // Don't resize tiny images — they're already small enough.
-  if (file.size < 300 * 1024) return file;
-  // Don't try to handle exotic formats (HEIC etc) — browsers can't
-  // always decode them. Just upload as-is and let the server deal.
+  const { aspect, maxEdge = 1600, quality = 0.85 } = opts;
+
+  // Browsers can't reliably decode HEIC/HEIF/exotic formats — pass through.
   if (!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) return file;
+  // Nothing to do: no crop requested and already small.
+  if (!aspect && file.size < 300 * 1024) return file;
 
   try {
     const bitmap = await createImageBitmap(file);
-    const longest = Math.max(bitmap.width, bitmap.height);
-    if (longest <= maxEdge) {
+    const w = bitmap.width;
+    const h = bitmap.height;
+
+    // Source crop rect — defaults to the whole image.
+    let sx = 0;
+    let sy = 0;
+    let cw = w;
+    let ch = h;
+    if (aspect && aspect.w > 0 && aspect.h > 0) {
+      const target = aspect.w / aspect.h;
+      const src = w / h;
+      if (src > target) {
+        // too wide → trim the sides
+        ch = h;
+        cw = Math.round(h * target);
+      } else {
+        // too tall → trim top & bottom
+        cw = w;
+        ch = Math.round(w / target);
+      }
+      sx = Math.round((w - cw) / 2);
+      sy = Math.round((h - ch) / 2);
+    }
+
+    // Downscale so the longest OUTPUT edge is <= maxEdge.
+    const longest = Math.max(cw, ch);
+    const scale = longest > maxEdge ? maxEdge / longest : 1;
+    const outW = Math.max(1, Math.round(cw * scale));
+    const outH = Math.max(1, Math.round(ch * scale));
+
+    // No crop + no downscale + already small → keep the original bytes.
+    if (!aspect && scale === 1 && file.size < 300 * 1024) {
       bitmap.close?.();
       return file;
     }
-    const scale = maxEdge / longest;
-    const targetW = Math.round(bitmap.width * scale);
-    const targetH = Math.round(bitmap.height * scale);
 
     const canvas = document.createElement("canvas");
-    canvas.width = targetW;
-    canvas.height = targetH;
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+    if (!ctx) {
+      bitmap.close?.();
+      return file;
+    }
+    ctx.drawImage(bitmap, sx, sy, cw, ch, 0, 0, outW, outH);
     bitmap.close?.();
 
     const blob: Blob | null = await new Promise((resolve) =>
@@ -48,8 +95,7 @@ async function resizeImageFile(
     );
     if (!blob) return file;
 
-    // Reuse the original filename but force a .jpg extension so the
-    // server-side content-type and storage URL line up.
+    // Force a .jpg extension so the storage content-type + URL line up.
     const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
     return new File([blob], `${baseName}.jpg`, {
       type: "image/jpeg",
@@ -69,7 +115,10 @@ async function resizeImageFile(
  *
  * Returns { url, mediaType } on success, { error } on failure.
  */
-export async function uploadMedia(file: File): Promise<
+export async function uploadMedia(
+  file: File,
+  opts: { aspect?: ImageAspect } = {},
+): Promise<
   | { url: string; mediaType: "image" | "video"; posterUrl?: string | null }
   | { error: string }
 > {
@@ -101,8 +150,11 @@ export async function uploadMedia(file: File): Promise<
     return { error: "Image too large (50 MB max)." };
   }
 
-  // Downscale images before upload. Videos go through as-is.
-  const payload = isImage ? await resizeImageFile(file) : file;
+  // Crop (if an aspect was requested) + downscale images before upload.
+  // Videos go through as-is.
+  const payload = isImage
+    ? await processImageFile(file, { aspect: opts.aspect })
+    : file;
 
   const safeName = payload.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
   // Single timestamp shared by the media path AND any poster sibling.
@@ -242,7 +294,12 @@ export async function uploadAvatar(file: File): Promise<
   if (!file.type.startsWith("image/")) return { error: "Pick an image." };
   if (file.size > 8 * 1024 * 1024) return { error: "Image too large (8 MB max)." };
 
-  const payload = await resizeImageFile(file, 800, 0.88);
+  // Avatars render as circles — crop square so the face fills the frame.
+  const payload = await processImageFile(file, {
+    aspect: { w: 1, h: 1 },
+    maxEdge: 800,
+    quality: 0.88,
+  });
   const safeName = payload.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
   const path = `${user.id}/${Date.now()}-${safeName}`;
   const { error: upErr } = await supabase.storage
