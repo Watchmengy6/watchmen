@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.0",
     "@capacitor/push-notifications": "^8.1.1",
     "@parse/node-apn": "^7.1.0",
     "@supabase/ssr": "^0.5.2",

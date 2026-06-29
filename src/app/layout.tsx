@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SplashGate } from "@/components/brand/SplashGate";
+import { DeepLinkHandler } from "@/components/native/DeepLinkHandler";
 
 export const metadata: Metadata = {
   title: "The Watchmen · Got Your 6",
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-[100dvh] bg-ink-900 text-white antialiased">
         <SplashGate />
+        <DeepLinkHandler />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
