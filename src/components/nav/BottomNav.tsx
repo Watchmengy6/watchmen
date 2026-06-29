@@ -118,6 +118,11 @@ export function BottomNav({ profileLabel = "·", profileSrc = null }: BottomNavP
             <Link
               key={href}
               href={href}
+              // Force a FULL prefetch (data included) of every tab. The nav is
+              // always on screen, so all five tabs warm up in the background as
+              // soon as the app opens — the first tap on each then hits an
+              // already-loaded route instead of a cold server render.
+              prefetch={true}
               aria-label={label}
               className={cn(
                 "flex flex-col items-center justify-center gap-[3px] py-1 transition-opacity active:opacity-60",
