@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup", "/invite", "/auth"];
+const PUBLIC_ROUTES = ["/", "/login", "/signup", "/invite", "/auth", "/.well-known"];
 
 function isPublic(pathname: string) {
   return PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"));
