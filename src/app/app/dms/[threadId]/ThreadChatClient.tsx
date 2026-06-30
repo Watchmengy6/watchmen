@@ -58,6 +58,7 @@ export function ThreadChatClient({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
   // FIFO queue of local-* ids that are waiting for their realtime echo.
   // When a realtime INSERT from me arrives, we shift the front of the queue
   // and replace that placeholder with the real row.
@@ -83,6 +84,15 @@ export function ThreadChatClient({
   // bottom. This flag is set right before the prepend and consumed by
   // the auto-scroll effect below to skip a single firing.
   const skipNextAutoScrollRef = useRef(false);
+
+  // Auto-grow the composer to fit its text (capped ~5 lines) so what you
+  // type is always fully visible inside the box instead of spilling out.
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "0px";
+    ta.style.height = Math.min(ta.scrollHeight, 128) + "px";
+  }, [text]);
 
   // Auto-scroll to bottom when new messages arrive (a new send or a
   // realtime insert from another brother). The skip-flag above
@@ -345,7 +355,7 @@ export function ThreadChatClient({
 
   return (
     <>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-1.5">
         {hasMoreOlder ? (
           <div className="flex justify-center pb-3">
             <button
@@ -460,6 +470,7 @@ export function ThreadChatClient({
             )}
           </button>
           <textarea
+            ref={taRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

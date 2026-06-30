@@ -22,6 +22,14 @@ const config: CapacitorConfig = {
     contentInset: 'never',
     backgroundColor: '#0a0a0b',
   },
+  plugins: {
+    // 'native' resizes the WebView to sit directly above the keyboard so
+    // the chat composer no longer floats with a big gap below it. Requires
+    // @capacitor/keyboard (added) + `npx cap sync ios` + a new build.
+    Keyboard: {
+      resize: 'native',
+    },
+  },
 };
 
 export default config;
