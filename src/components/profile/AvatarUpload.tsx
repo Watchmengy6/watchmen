@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { uploadAvatar } from "@/lib/uploads/client";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils/cn";
 
 export function AvatarUpload({
-  authUserId,
   name,
   defaultUrl,
 }: {
-  authUserId: string;
+  // authUserId kept for call-site compatibility; the upload path now
+  // derives the owner from the authed session inside uploadAvatar().
+  authUserId?: string;
   name: string;
   defaultUrl: string | null;
 }) {
@@ -22,25 +23,16 @@ export function AvatarUpload({
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      push({ title: "Image too large", body: "Max 8 MB.", variant: "error" });
-      return;
-    }
     setBusy(true);
-    const supabase = supabaseBrowser();
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${authUserId}/avatar-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, {
-      contentType: file.type || "image/jpeg",
-      upsert: true,
-    });
-    if (upErr) {
-      push({ title: "Upload failed", body: upErr.message, variant: "error" });
+    // uploadAvatar() validates type + 8 MB cap, center-crops square and
+    // downscales to an 800px edge before upload, then returns the URL.
+    const result = await uploadAvatar(file);
+    if ("error" in result) {
+      push({ title: "Upload failed", body: result.error, variant: "error" });
       setBusy(false);
       return;
     }
-    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    setUrl(data.publicUrl);
+    setUrl(result.url);
     setBusy(false);
   }
 
