@@ -24,8 +24,10 @@ export default async function MeetupsPage() {
   const rsvpCount = new Map<string, number>();
   const myRsvp = new Set<string>();
   if (ids.length > 0) {
+    // Going counts via grouped-count RPC (meetup_going_counts, migration
+    // 00045) instead of fetching every going row and counting in JS.
     const [{ data: rsvps }, { data: mine }] = await Promise.all([
-      supabase.from("meetup_rsvps").select("meetup_id").in("meetup_id", ids).eq("going", true),
+      supabase.rpc("meetup_going_counts", { p_meetup_ids: ids }),
       supabase
         .from("meetup_rsvps")
         .select("meetup_id")
@@ -34,7 +36,7 @@ export default async function MeetupsPage() {
         .eq("going", true),
     ]);
     (rsvps ?? []).forEach((r: any) =>
-      rsvpCount.set(r.meetup_id, (rsvpCount.get(r.meetup_id) ?? 0) + 1),
+      rsvpCount.set(r.meetup_id, Number(r.going_count) || 0),
     );
     (mine ?? []).forEach((r: any) => myRsvp.add(r.meetup_id));
   }

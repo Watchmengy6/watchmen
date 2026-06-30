@@ -49,6 +49,27 @@ export async function deleteMyAccountAction(): Promise<{ error?: string }> {
       // via our gate).
       console.warn("[account.delete] auth user delete failed", delErr);
     }
+
+    // Remove the member's avatar files. The profile pic is PII and we've
+    // already nulled profile_photo_url, so the stored object is orphaned.
+    // Uploaded avatars live under `<auth user id>/...` in the avatars
+    // bucket (see uploadAvatar in lib/uploads/client.ts). Best-effort —
+    // a failure here must not block account deletion.
+    // NOTE: chat-media / post images are intentionally NOT deleted; they're
+    // attached to posts/comments/messages we keep so historical
+    // conversations stay coherent under the "Deleted member" tombstone.
+    try {
+      const { data: avatarFiles } = await admin.storage
+        .from("avatars")
+        .list(user.id);
+      if (avatarFiles && avatarFiles.length > 0) {
+        await admin.storage
+          .from("avatars")
+          .remove(avatarFiles.map((f) => `${user.id}/${f.name}`));
+      }
+    } catch (e) {
+      console.warn("[account.delete] avatar cleanup failed (non-fatal)", e);
+    }
   } catch (e) {
     console.warn("[account.delete] admin deleteUser threw (non-fatal)", e);
   }

@@ -124,12 +124,11 @@ export default async function EventsPage({
   const rsvpCount: Record<string, number> = {};
   const mineMap: Record<string, string> = {};
   if (eventIds.length > 0) {
+    // Going counts come from a grouped-count RPC (event_going_counts,
+    // migration 00045) instead of pulling every "going" row to the phone
+    // and counting in JS — keeps the payload flat as events fill up.
     const [{ data: counts }, { data: mine }] = await Promise.all([
-      supabase
-        .from("event_rsvps")
-        .select("event_id")
-        .in("event_id", eventIds)
-        .eq("status", "going"),
+      supabase.rpc("event_going_counts", { p_event_ids: eventIds }),
       supabase
         .from("event_rsvps")
         .select("event_id, status")
@@ -137,7 +136,7 @@ export default async function EventsPage({
         .eq("user_id", profile.id),
     ]);
     (counts ?? []).forEach((r: any) => {
-      rsvpCount[r.event_id] = (rsvpCount[r.event_id] ?? 0) + 1;
+      rsvpCount[r.event_id] = Number(r.going_count) || 0;
     });
     (mine ?? []).forEach((r: any) => {
       mineMap[r.event_id] = r.status;
