@@ -473,12 +473,6 @@ export function ThreadChatClient({
             ref={taRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
             rows={1}
             placeholder="iMessage"
             className="flex-1 max-h-32 rounded-2xl bg-ink-800 hairline px-3.5 py-2 text-[15px] text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 resize-none"
