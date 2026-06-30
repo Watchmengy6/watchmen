@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/brand/Logo";
 import { logoutAction } from "@/lib/auth/actions";
 import { WebOnly } from "@/components/util/WebOnly";
+import { EnablePushButton } from "@/components/push/EnablePushButton";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function PendingPage() {
           <p className="text-ink-300 mt-3 text-[15px] leading-relaxed">
             {rejected
               ? "Reach out to your inviter if you think this is a mistake."
-              : "An admin will review your request. You'll get access once you're approved."}
+              : "An admin will review your request. Turn on notifications below and we'll ping you the moment you're approved."}
           </p>
           <form action={logoutAction} className="mt-6">
             <Button type="submit" variant="outline" fullWidth>
@@ -55,6 +56,7 @@ export default async function PendingPage() {
           </form>
         </CardBody>
       </Card>
+
       {/* Only show install nudges on web — native iOS users are already
           inside the installed app.
 
@@ -107,6 +109,30 @@ export default async function PendingPage() {
           </p>
         </div>
       </WebOnly>
+
+      {/* Notifications — so the approval lands as a push. In the native app
+          this is the APNs enable button; on un-installed iOS Safari it
+          explains the Add-to-Home-Screen step. Shown after the download CTA
+          because enabling push really happens once they're in the app. */}
+      {!rejected ? (
+        <div className="mt-5 w-full max-w-sm">
+          <div className="rounded-2xl bg-ink-800 hairline px-4 py-5 text-left">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-gold-300/80">
+              Get notified
+            </div>
+            <div className="text-white text-[15px] font-semibold mt-1.5">
+              Turn on notifications
+            </div>
+            <p className="text-ink-300 text-[13px] leading-relaxed mt-2">
+              We&apos;ll send you a push the moment you&apos;re approved so you can
+              finish setting up your account.
+            </p>
+            <div className="mt-4">
+              <EnablePushButton />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

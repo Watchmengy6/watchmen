@@ -70,9 +70,9 @@ export default async function InviteLanding({
               </div>
             </div>
             <p className="text-ink-200 mt-4 text-sm leading-relaxed">
-              {inviter.full_name.split(" ")[0]} invited you to join The Watchmen, the
-              ultimate and most exclusive membership for men in Tampa Bay.
-              Create your account, and an admin will review your request.
+              {inviter.full_name.split(" ")[0]} invited you to join The Watchmen — the
+              most exclusive brotherhood for men in Tampa Bay. Create your account,
+              and an admin will review your request.
             </p>
             <div className="mt-5 flex flex-col gap-2">
               <Link href={`/signup?code=${params.code}`}>

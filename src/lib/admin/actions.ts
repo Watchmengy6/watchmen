@@ -69,8 +69,8 @@ export async function approveMemberAction(profileId: string) {
       await sendPushToUser({
         userId: profileId,
         payload: {
-          title: "You're in",
-          body: "Welcome to The Watchmen. Got Your 6.",
+          title: "You've been approved 🎉",
+          body: "Continue setting up your account.",
           url: "/app/home",
           tag: "approved",
         },
