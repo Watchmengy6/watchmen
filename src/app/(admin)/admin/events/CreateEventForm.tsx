@@ -41,9 +41,10 @@ export function CreateEventForm() {
       setUploading(false);
       return;
     }
-    // Event banners render wide — crop to 16:9 so the image fits every
-    // event card (and downscale) before upload.
-    const processed = await processImageFile(file, { aspect: { w: 16, h: 9 } });
+    // Event images are flyers (full graphics with text to the edges), so we
+    // must NOT crop them — just downscale + auto-orient. They're displayed at
+    // their natural ratio so nothing gets cut off.
+    const processed = await processImageFile(file);
     const ext = processed.type === "image/jpeg" ? "jpg" : file.name.split(".").pop() || "jpg";
     const path = `${user.id}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage

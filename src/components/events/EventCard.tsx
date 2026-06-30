@@ -20,7 +20,7 @@ export function EventCard(p: Props) {
       <Card className="overflow-hidden">
         {p.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.image_url} alt={p.title} className="w-full h-36 object-cover" />
+          <img src={p.image_url} alt={p.title} className="w-full h-auto block" />
         ) : (
           <div className="h-36 bg-gradient-to-br from-ink-700 to-ink-900 flex items-center justify-center">
             <span className="text-gradient-gold font-semibold tracking-tight">{p.title}</span>

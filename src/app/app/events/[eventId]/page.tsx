@@ -45,7 +45,7 @@ export default async function EventDetail({ params }: { params: { eventId: strin
     <div className="pt-2 pb-10">
       {event.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={event.image_url} alt={event.title} className="w-full h-52 object-cover" />
+        <img src={event.image_url} alt={event.title} className="w-full h-auto block" />
       ) : (
         <div className="h-52 bg-gradient-to-br from-ink-700 to-ink-900 flex items-center justify-center">
           <span className="text-gradient-gold text-2xl font-semibold">{event.title}</span>
