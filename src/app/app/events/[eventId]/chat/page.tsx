@@ -86,7 +86,7 @@ export default async function EventChatPage({
   });
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-ink-900 flex flex-col">
+    <div className="fixed inset-0 overflow-hidden bg-ink-900 flex flex-col">
       <div
         className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
