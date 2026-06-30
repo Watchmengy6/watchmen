@@ -4,12 +4,19 @@ import { useEffect, useState } from "react";
 
 /** Premium countdown to a target ISO timestamp. */
 export function Countdown({ target }: { target: string }) {
-  const [now, setNow] = useState(() => Date.now());
+  // Start null so the server render and the FIRST client render match (both
+  // render a neutral placeholder). Reading Date.now() during render makes the
+  // server (Vercel) and the device disagree, throwing a React hydration
+  // mismatch (#418/#422/#425) that can flash a blank screen in the WebView.
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
+    setNow(Date.now());
     const i = setInterval(() => setNow(Date.now()), 1000 * 30);
     return () => clearInterval(i);
   }, []);
+
+  if (now === null) return <span aria-hidden="true">&nbsp;</span>;
 
   const t = new Date(target).getTime();
   const diff = Math.max(0, t - now);
