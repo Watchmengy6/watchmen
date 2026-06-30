@@ -4,30 +4,64 @@ import { useFormState, useFormStatus } from "react-dom";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
-import { createEventAction } from "@/lib/events/actions";
+import { createEventAction, updateEventAction } from "@/lib/events/actions";
 import { useToast } from "@/components/ui/Toast";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { processImageFile } from "@/lib/uploads/client";
 
-function Submit() {
+export interface EventInitial {
+  id: string;
+  title: string;
+  kind: string | null;
+  description: string | null;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  location_name: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  image_url: string | null;
+}
+
+function Submit({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant="gold" size="md" loading={pending} fullWidth>
-      Publish event
+      {label}
     </Button>
   );
 }
 
-export function CreateEventForm() {
-  const [state, action] = useFormState(createEventAction, {} as { error?: string; success?: boolean });
-  const [imageUrl, setImageUrl] = useState("");
+/**
+ * Create OR edit an event. Pass `mode="edit"` + `initial` (the existing
+ * event row) to prefill every field and update instead of insert. The
+ * flyer image can be swapped without disturbing the other fields.
+ */
+export function CreateEventForm({
+  mode = "create",
+  initial,
+}: {
+  mode?: "create" | "edit";
+  initial?: EventInitial;
+}) {
+  const isEdit = mode === "edit";
+  const [state, action] = useFormState(
+    isEdit ? updateEventAction : createEventAction,
+    {} as { error?: string; success?: boolean },
+  );
+  const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
   const [uploading, setUploading] = useState(false);
   const { push } = useToast();
 
   useEffect(() => {
-    if (state?.success) push({ title: "Event published", variant: "success" });
+    if (state?.success)
+      push({
+        title: isEdit ? "Event updated" : "Event published",
+        variant: "success",
+      });
     if (state?.error) push({ title: "Failed", body: state.error, variant: "error" });
-  }, [state, push]);
+  }, [state, push, isEdit]);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -63,15 +97,23 @@ export function CreateEventForm() {
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="image_url" value={imageUrl} />
+      {isEdit && initial ? (
+        <input type="hidden" name="event_id" value={initial.id} />
+      ) : null}
       <div>
         <Label>Title</Label>
-        <Input name="title" required placeholder="Watchman Cigar Night" />
+        <Input
+          name="title"
+          required
+          placeholder="Watchman Cigar Night"
+          defaultValue={initial?.title ?? ""}
+        />
       </div>
       <div>
         <Label>Type</Label>
         <select
           name="kind"
-          defaultValue="watchmen"
+          defaultValue={initial?.kind ?? "watchmen"}
           className="w-full h-11 rounded-xl bg-ink-800 hairline px-3 text-[15px] text-white outline-none"
         >
           <option value="watchmen">Watchmen Event</option>
@@ -80,38 +122,51 @@ export function CreateEventForm() {
       </div>
       <div>
         <Label>Description</Label>
-        <Textarea name="description" rows={3} placeholder="What to expect, what to bring..." />
+        <Textarea
+          name="description"
+          rows={3}
+          placeholder="What to expect, what to bring..."
+          defaultValue={initial?.description ?? ""}
+        />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="col-span-1">
           <Label>Date</Label>
-          <Input name="event_date" type="date" required />
+          <Input name="event_date" type="date" required defaultValue={initial?.event_date ?? ""} />
         </div>
         <div>
           <Label>Start</Label>
-          <Input name="start_time" type="time" />
+          <Input name="start_time" type="time" defaultValue={initial?.start_time?.slice(0, 5) ?? ""} />
         </div>
         <div>
           <Label>End</Label>
-          <Input name="end_time" type="time" />
+          <Input name="end_time" type="time" defaultValue={initial?.end_time?.slice(0, 5) ?? ""} />
         </div>
       </div>
       <div>
         <Label>Location name</Label>
-        <Input name="location_name" placeholder="Rooftop on Central" />
+        <Input
+          name="location_name"
+          placeholder="Rooftop on Central"
+          defaultValue={initial?.location_name ?? ""}
+        />
       </div>
       <div>
         <Label>Address</Label>
-        <Input name="address" placeholder="123 Central Ave, St. Petersburg, FL" />
+        <Input
+          name="address"
+          placeholder="123 Central Ave, St. Petersburg, FL"
+          defaultValue={initial?.address ?? ""}
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label>Latitude</Label>
-          <Input name="latitude" placeholder="27.7676" />
+          <Input name="latitude" placeholder="27.7676" defaultValue={initial?.latitude ?? ""} />
         </div>
         <div>
           <Label>Longitude</Label>
-          <Input name="longitude" placeholder="-82.6403" />
+          <Input name="longitude" placeholder="-82.6403" defaultValue={initial?.longitude ?? ""} />
         </div>
       </div>
       <div>
@@ -122,7 +177,7 @@ export function CreateEventForm() {
         </label>
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt="" className="mt-2 rounded-xl h-28 w-full object-cover" />
+          <img src={imageUrl} alt="" className="mt-2 rounded-xl w-full h-auto block" />
         ) : null}
       </div>
       {state?.error ? (
@@ -130,7 +185,7 @@ export function CreateEventForm() {
           {state.error}
         </div>
       ) : null}
-      <Submit />
+      <Submit label={isEdit ? "Save changes" : "Publish event"} />
     </form>
   );
 }

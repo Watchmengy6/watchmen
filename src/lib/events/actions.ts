@@ -219,3 +219,67 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
   revalidatePath("/app/home");
   return { success: true };
 }
+
+/**
+ * Update an existing event. Admin-gated. Reads `event_id` from the form
+ * (the edit form injects it as a hidden field) and overwrites the event's
+ * fields with the submitted values — including swapping the flyer image.
+ */
+export async function updateEventAction(_prev: unknown, formData: FormData) {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+    return { error: "Admin only." };
+  }
+
+  const eventId = String(formData.get("event_id") ?? "").trim();
+  if (!eventId) return { error: "Missing event." };
+
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const event_date = String(formData.get("event_date") ?? "").trim();
+  const start_time = String(formData.get("start_time") ?? "").trim() || null;
+  const end_time = String(formData.get("end_time") ?? "").trim() || null;
+  const location_name = String(formData.get("location_name") ?? "").trim() || null;
+  const address = String(formData.get("address") ?? "").trim() || null;
+  const image_url = String(formData.get("image_url") ?? "").trim() || null;
+  const latitudeStr = String(formData.get("latitude") ?? "").trim();
+  const longitudeStr = String(formData.get("longitude") ?? "").trim();
+  const kindRaw = String(formData.get("kind") ?? "watchmen").trim();
+  const kind = kindRaw === "sponsored" ? "sponsored" : "watchmen";
+
+  if (!title || !event_date) return { error: "Title and date are required." };
+
+  const { error } = await supabase
+    .from("events")
+    .update({
+      title,
+      description,
+      event_date,
+      start_time,
+      end_time,
+      location_name,
+      address,
+      image_url,
+      latitude: latitudeStr ? Number(latitudeStr) : null,
+      longitude: longitudeStr ? Number(longitudeStr) : null,
+      kind,
+    })
+    .eq("id", eventId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/app/events/${eventId}`);
+  revalidatePath("/app/events");
+  revalidatePath("/admin/events");
+  revalidatePath("/app/home");
+  return { success: true };
+}

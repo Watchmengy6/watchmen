@@ -73,7 +73,15 @@ export default async function AdminEventsPage() {
                   {goingMap[e.id] ?? 0} going · {checkedMap[e.id] ?? 0} checked in
                 </div>
               </div>
-              <DeleteEventButton id={e.id} />
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <Link
+                  href={`/admin/events/${e.id}/edit`}
+                  className="h-8 px-3 rounded-full bg-ink-800 hairline text-[12px] text-gold-200 inline-flex items-center"
+                >
+                  Edit
+                </Link>
+                <DeleteEventButton id={e.id} />
+              </div>
             </div>
           </Card>
         ))}
