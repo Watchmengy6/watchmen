@@ -68,6 +68,35 @@ export async function loadPostCommentsAction(
 }
 
 /**
+ * Delete a comment. The RLS policy "post_comments author delete"
+ * (migration 00009) only permits the delete when the caller is the
+ * comment's author OR an admin, so we rely on the database to enforce
+ * permission — an unauthorized caller simply deletes 0 rows. We .select()
+ * the deleted id back to confirm a row was actually removed and return a
+ * clean error otherwise.
+ */
+export async function deleteCommentAction(
+  commentId: string,
+): Promise<{ error?: string }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: deleted, error } = await supabase
+    .from("post_comments")
+    .delete()
+    .eq("id", commentId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!deleted || deleted.length === 0) {
+    return { error: "You can only delete your own comments." };
+  }
+  return {};
+}
+
+/**
  * Cast (or change) a vote on a feed poll. One vote per member per
  * post — upserts on (post_id, user_id).
  */

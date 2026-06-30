@@ -1,7 +1,7 @@
 "use client";
 
 import { FeedPost, type FeedPostShape } from "@/components/feed/FeedPost";
-import { toggleLikeAction, addCommentAction } from "@/lib/feed/actions";
+import { toggleLikeAction, addCommentAction, deleteCommentAction } from "@/lib/feed/actions";
 
 interface Props {
   post: FeedPostShape;
@@ -46,6 +46,9 @@ export function FeedPostClient({
       }}
       onAddComment={async (postId, body) => {
         return await addCommentAction(postId, body);
+      }}
+      onDeleteComment={async (commentId) => {
+        return await deleteCommentAction(commentId);
       }}
     />
   );

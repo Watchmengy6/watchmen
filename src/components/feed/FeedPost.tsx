@@ -97,6 +97,8 @@ export interface FeedPostProps {
     postId: string,
     body: string,
   ) => Promise<{ comment?: FeedPostComment; error?: string } | void>;
+  /** Delete a comment by id. Author-or-admin is enforced server-side. */
+  onDeleteComment?: (commentId: string) => Promise<{ error?: string } | void>;
   meName?: string;
   meAvatar?: string | null;
   /** Members the user can @mention in a comment. */
@@ -119,6 +121,7 @@ export function FeedPost({
   post,
   onToggleLike,
   onAddComment,
+  onDeleteComment,
   meName,
   meAvatar,
   mentionablePeople = [],
@@ -266,6 +269,22 @@ export function FeedPost({
         setDraft("");
       } else if (r && "error" in r && r.error) {
         // surface? for now keep draft so user can retry
+      }
+    });
+  }
+
+  function handleDeleteComment(commentId: string) {
+    if (!onDeleteComment) return;
+    if (typeof window !== "undefined" && !window.confirm("Delete this comment?")) {
+      return;
+    }
+    const prev = comments;
+    // Optimistic remove; roll back if the server rejects it.
+    setComments((cs) => cs.filter((c) => c.id !== commentId));
+    startTransition(async () => {
+      const r = await onDeleteComment(commentId);
+      if (r && "error" in r && r.error) {
+        setComments(prev);
       }
     });
   }
@@ -496,15 +515,26 @@ export function FeedPost({
                       <div className="text-[12.5px] font-semibold text-white flex-1 truncate">
                         {c.user_name}
                       </div>
-                      {/* Per-comment Report — Apple-required for any
-                          user-generated content. Hidden when it's your
-                          own comment. */}
-                      {c.user_id && c.user_id !== post.author.id ? null : null}
-                      <ReportButton
-                        target={{ kind: "comment", id: c.id }}
-                        className="text-ink-400 text-[10.5px] hover:text-white shrink-0"
-                        label="Report"
-                      />
+                      {/* Report — only on others' comments (you can't
+                          report your own). Apple-required for any UGC. */}
+                      {!(viewerProfileId && c.user_id === viewerProfileId) ? (
+                        <ReportButton
+                          target={{ kind: "comment", id: c.id }}
+                          className="text-ink-400 text-[10.5px] hover:text-white shrink-0"
+                          label="Report"
+                        />
+                      ) : null}
+                      {/* Delete — your own comment, or any comment if admin. */}
+                      {onDeleteComment &&
+                      ((viewerProfileId && c.user_id === viewerProfileId) || isAdmin) ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteComment(c.id)}
+                          className="text-ink-400 text-[10.5px] hover:text-red-300 shrink-0"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </div>
                     <div
                       className="text-[14px] text-ink-100 leading-snug mt-0.5 whitespace-pre-wrap break-words"
