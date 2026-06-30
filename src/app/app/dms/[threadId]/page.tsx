@@ -24,13 +24,29 @@ export default async function DmThreadPage({
     .maybeSingle();
   if (!thread) notFound();
 
-  // Members in this thread (for header + counterpart name on DMs).
-  const { data: members } = await supabase
-    .from("thread_members")
-    .select(
-      "user_id, profile:profiles!thread_members_user_id_fkey(id, full_name, profile_photo_url)",
-    )
-    .eq("thread_id", thread.id);
+  // Members (for header + counterpart name) and messages both depend only
+  // on thread.id, not each other — fetch them in parallel to save a
+  // round-trip. Messages: newest 50 (not 200) for snappy first paint on
+  // long threads; older history loads on demand via ThreadChatClient
+  // (hence initialPageSize={INITIAL_PAGE_SIZE} below).
+  const INITIAL_PAGE_SIZE = 50;
+  const [{ data: members }, { data: messagesDesc }] = await Promise.all([
+    supabase
+      .from("thread_members")
+      .select(
+        "user_id, profile:profiles!thread_members_user_id_fkey(id, full_name, profile_photo_url)",
+      )
+      .eq("thread_id", thread.id),
+    supabase
+      .from("thread_messages")
+      .select(
+        "id, body, media_url, media_type, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
+      )
+      .eq("thread_id", thread.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(INITIAL_PAGE_SIZE),
+  ]);
 
   const others = (members ?? [])
     .map((row: any) => (Array.isArray(row.profile) ? row.profile[0] : row.profile))
@@ -42,16 +58,6 @@ export default async function DmThreadPage({
       : thread.title ?? "Conversation";
   const headerAvatar = thread.kind === "dm" ? others[0]?.profile_photo_url ?? null : null;
 
-  // Messages — newest 200, then reverse to render oldest-first.
-  const { data: messagesDesc } = await supabase
-    .from("thread_messages")
-    .select(
-      "id, body, media_url, media_type, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, full_name, profile_photo_url)",
-    )
-    .eq("thread_id", thread.id)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(200);
   const messages = (messagesDesc ?? []).slice().reverse();
 
   // Fire-and-forget the read marker so we don't block first paint of the
@@ -103,6 +109,7 @@ export default async function DmThreadPage({
         meId={profile.id}
         meName={profile.full_name}
         meAvatar={profile.profile_photo_url}
+        initialPageSize={INITIAL_PAGE_SIZE}
       />
     </div>
   );

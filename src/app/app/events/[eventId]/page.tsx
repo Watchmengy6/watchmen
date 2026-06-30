@@ -25,19 +25,19 @@ export default async function EventDetail({ params }: { params: { eventId: strin
     .maybeSingle();
   if (!event) notFound();
 
-  // checked_in column was revoked from `authenticated` in migration 00011 —
-  // use the my_event_rsvp() SECURITY DEFINER RPC for self-RSVP reads.
-  const { data: myRsvpRows } = await supabase.rpc("my_event_rsvp", {
-    p_event_id: event.id,
-  });
+  // The self-RSVP read and the attendee list both depend only on event.id,
+  // not on each other — run them in parallel to save a round-trip.
+  // checked_in was revoked from `authenticated` in migration 00011, so
+  // self-RSVP reads go through the my_event_rsvp() SECURITY DEFINER RPC.
+  const [{ data: myRsvpRows }, { data: attendees }] = await Promise.all([
+    supabase.rpc("my_event_rsvp", { p_event_id: event.id }),
+    supabase
+      .from("event_rsvps")
+      .select("user_id, status, profiles(id, full_name, profile_photo_url)")
+      .eq("event_id", event.id)
+      .eq("status", "going"),
+  ]);
   const myRsvp = Array.isArray(myRsvpRows) && myRsvpRows.length > 0 ? myRsvpRows[0] : null;
-
-  // Attendee list — drop checked_in (revoked); we still get status + profile.
-  const { data: attendees } = await supabase
-    .from("event_rsvps")
-    .select("user_id, status, profiles(id, full_name, profile_photo_url)")
-    .eq("event_id", event.id)
-    .eq("status", "going");
 
   const going = myRsvp?.status === "going";
 

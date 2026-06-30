@@ -39,7 +39,11 @@ export default async function GroupChatPage({
     .maybeSingle();
   if (!thread) notFound();
 
-  // Fetch newest 200 desc, then reverse to render oldest→newest.
+  // Fetch newest 50 desc, then reverse to render oldest→newest. 50 (not
+  // 200) keeps first paint snappy on long-running group threads; older
+  // history loads on demand via ThreadChatClient's "Load older" button
+  // (which is why initialPageSize={50} is passed below).
+  const INITIAL_PAGE_SIZE = 50;
   const { data: messagesDesc } = await supabase
     .from("thread_messages")
     .select(
@@ -48,7 +52,7 @@ export default async function GroupChatPage({
     .eq("thread_id", thread.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(INITIAL_PAGE_SIZE);
   const messages = (messagesDesc ?? []).slice().reverse();
 
   // Mark this group's thread as read for the current member.
@@ -98,6 +102,7 @@ export default async function GroupChatPage({
         meId={profile.id}
         meName={profile.full_name}
         meAvatar={profile.profile_photo_url}
+        initialPageSize={INITIAL_PAGE_SIZE}
       />
     </div>
   );

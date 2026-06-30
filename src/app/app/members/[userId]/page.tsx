@@ -33,27 +33,28 @@ export default async function MemberProfile({ params }: { params: { userId: stri
   // Non-admin viewers can only see approved members.
   if (!isAdmin && m.status !== "approved") notFound();
 
-  // Watchmen member number — sequential by join order. Computed via the
-  // SECURITY DEFINER RPC so the rank stays stable across viewers.
-  const { data: memberNumber } = await supabase.rpc("watchmen_member_number", {
-    p_profile_id: m.id,
-  });
-
-  // Has the viewer already blocked this member? Used to render the
-  // block / unblock toggle. Self-view skips the moderation row entirely.
+  // The Watchmen member number (RPC), the block-status lookup, and the
+  // two profile counts are all independent — they only need m.id / me.id,
+  // not each other. Fetch them in ONE parallel batch instead of stacking
+  // serial round-trips (this screen is opened constantly). Self-view skips
+  // the block lookup. memberNumber is the SECURITY DEFINER RPC so the rank
+  // stays stable across viewers.
   const isSelf = m.id === me.id;
-  let isBlocked = false;
-  if (!isSelf) {
-    const { data: blockRow } = await supabase
-      .from("user_blocks")
-      .select("id")
-      .eq("blocker_id", me.id)
-      .eq("blocked_id", m.id)
-      .maybeSingle();
-    isBlocked = !!blockRow;
-  }
-
-  const [{ count: invitesApproved }, { count: eventsAttended }] = await Promise.all([
+  const [
+    { data: memberNumber },
+    blockRes,
+    { count: invitesApproved },
+    { count: eventsAttended },
+  ] = await Promise.all([
+    supabase.rpc("watchmen_member_number", { p_profile_id: m.id }),
+    isSelf
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from("user_blocks")
+          .select("id")
+          .eq("blocker_id", me.id)
+          .eq("blocked_id", m.id)
+          .maybeSingle(),
     supabase
       .from("profiles")
       .select("*", { count: "exact", head: true })
@@ -65,6 +66,7 @@ export default async function MemberProfile({ params }: { params: { userId: stri
       .eq("user_id", m.id)
       .eq("status", "going"),
   ]);
+  const isBlocked = !!blockRes.data;
 
   // Build social links. instagram_url may be a handle or a full URL.
   const igUrl = m.instagram_url
