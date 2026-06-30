@@ -78,9 +78,9 @@ export default async function DmsPage({
   const listForTab = activeTab === "groups" ? groupThreads : dmThreads;
 
   return (
-    <div className="min-h-[100dvh] bg-ink-900 pb-28">
+    <div className="fixed inset-0 overflow-hidden bg-ink-900 flex flex-col">
       <div
-        className="sticky top-0 z-30 bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
+        className="bg-ink-900/85 backdrop-blur-xl border-b border-white/[0.05]"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center justify-between px-4 py-2.5">
@@ -109,6 +109,7 @@ export default async function DmsPage({
         </div>
       </div>
 
+      <div className="flex-1 overflow-y-auto overscroll-contain pb-28">
       <div className="divide-y divide-white/[0.04]">
         {listForTab.length === 0 ? (
           <div className="px-6 py-16 text-center text-ink-300 text-sm">
@@ -184,6 +185,7 @@ export default async function DmsPage({
       <p className="px-6 pt-6 text-[11px] text-ink-400 text-center">
         Only Watchmen members can DM you.
       </p>
+      </div>
     </div>
   );
 }
