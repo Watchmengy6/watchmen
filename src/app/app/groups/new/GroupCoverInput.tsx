@@ -52,7 +52,7 @@ export function GroupCoverInput() {
           <img
             src={url}
             alt=""
-            className="w-full h-40 rounded-xl object-cover"
+            className="w-full aspect-square rounded-xl object-cover"
           />
           <button
             type="button"

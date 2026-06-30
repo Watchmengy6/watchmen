@@ -76,7 +76,7 @@ export default async function GroupDetail({
             <img
               src={group.cover_url}
               alt=""
-              className="w-full h-44 object-cover"
+              className="w-full aspect-square object-cover"
             />
             <div className="bg-gradient-to-br from-gold-500/15 via-gold-700/5 to-transparent p-5">
               <div className="text-white text-[20px] font-semibold">{group.name}</div>
