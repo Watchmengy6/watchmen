@@ -1,6 +1,7 @@
 import "server-only";
 import webpush from "web-push";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { debugLog } from "@/lib/utils/debugLog";
 
 let configured = false;
 
@@ -52,7 +53,7 @@ async function getApnsProvider(): Promise<any | null> {
       },
       production: process.env.APNS_PRODUCTION === "true",
     });
-    console.log(
+    debugLog(
       `[push.apns] provider ready (${process.env.APNS_PRODUCTION === "true" ? "production" : "sandbox"})`,
     );
     return apnsProvider;
@@ -173,7 +174,7 @@ function sendNativePushStub(opts: {
   payload: PushPayload;
 }): void {
   if (!opts.deviceToken) return;
-  console.log(
+  debugLog(
     `[push.native:stub] NOT delivered (${opts.platform} sender not wired) — token ${opts.deviceToken.slice(0, 8)}…: ${opts.payload.title}`,
   );
 }
@@ -225,7 +226,7 @@ async function sendApnsPush(opts: {
         .from("push_subscriptions")
         .delete()
         .eq("id", opts.subscriptionId);
-      console.log(`[push.apns] pruned stale token (${reason})`);
+      debugLog(`[push.apns] pruned stale token (${reason})`);
     } else {
       console.warn("[push.apns] send failed:", reason, failure);
     }
@@ -294,7 +295,7 @@ export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
       "user_id",
       admins.map((a) => a.id),
     );
-  console.log(
+  debugLog(
     `[push.admins] notifying ${admins.length} admin(s) — ${subCount ?? 0} subscriptions on file`,
   );
 
@@ -312,7 +313,7 @@ export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
   const totalSent = results.reduce((s, r) => s + r.sent, 0);
   const totalFailed = results.reduce((s, r) => s + r.failed, 0);
   const totalSkipped = results.reduce((s, r) => s + r.skipped, 0);
-  console.log(
+  debugLog(
     `[push.admins] done: ${totalSent} delivered, ${totalFailed} failed, ${totalSkipped} skipped (native stub)`,
   );
 }

@@ -76,7 +76,10 @@ export async function toggleReactionAction(input: {
       user_id: profile.id,
       reaction_type: reaction,
     });
-    if (error) return { error: error.message };
+    // Swallow unique-violation (Postgres 23505): a fast double-tap raced
+    // two inserts and the reaction already exists — treat as success so the
+    // toggle stays idempotent (mirrors toggleLikeAction).
+    if (error && (error as any).code !== "23505") return { error: error.message };
   }
   return { success: true };
 }

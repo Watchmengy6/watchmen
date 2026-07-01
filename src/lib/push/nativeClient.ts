@@ -1,5 +1,7 @@
 "use client";
 
+import { debugLog } from "@/lib/utils/debugLog";
+
 /**
  * Client-side bootstrap for native iOS / Android push notifications.
  *
@@ -44,7 +46,7 @@ export async function initNativePush(): Promise<void> {
       perm = await PushNotifications.requestPermissions();
     }
     if (perm.receive !== "granted") {
-      console.log("[push.native] permission not granted", perm.receive);
+      debugLog("[push.native] permission not granted", perm.receive);
       return;
     }
   } catch (e) {
@@ -67,7 +69,7 @@ export async function initNativePush(): Promise<void> {
       if (res?.error) {
         console.warn("[push.native] register action failed:", res.error);
       } else {
-        console.log("[push.native] device token registered");
+        debugLog("[push.native] device token registered");
       }
     } catch (e) {
       console.warn("[push.native] register action threw", e);
