@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 
 /**
- * Full-screen image viewer. Tapping a feed image opens this so members
- * can read graphics with small text (the feed card crops + shrinks them).
+ * Full-screen image viewer. Tapping a feed/event/group image opens this so
+ * members can read graphics with small text (feed cards crop + shrink them).
  *
- * - Tap the backdrop or the × to close.
- * - Tap the image to toggle a 2x zoom; when zoomed, the container scrolls
- *   so you can pan around a dense graphic.
- * - Locks body scroll while open.
+ * Close paths (all work):
+ *   - the × button (fixed, top layer)
+ *   - tapping the backdrop / any empty space around the image
+ *   - Escape key (desktop/web)
+ * Tapping the IMAGE toggles a 2x zoom and lets you pan via scroll; it does
+ * NOT close (stopPropagation), so you can inspect a dense graphic.
  */
 export function ImageLightbox({
   src,
@@ -20,7 +22,6 @@ export function ImageLightbox({
 }) {
   const [zoomed, setZoomed] = useState(false);
 
-  // Close on Escape (harmless on mobile, handy on desktop/web).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -30,34 +31,42 @@ export function ImageLightbox({
   }, [onClose]);
 
   return (
+    // Backdrop is also the scroll container (needed when the image is
+    // zoomed past the viewport). Tapping it closes.
     <div
-      className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center"
+      className="fixed inset-0 z-[120] bg-black/95 overflow-auto"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
+      {/* Close button — fixed + top z so nothing can cover it. Its own
+          stopPropagation avoids double-firing the backdrop handler. */}
       <button
         type="button"
-        onClick={onClose}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
         aria-label="Close"
-        className="absolute right-4 h-10 w-10 rounded-full bg-white/10 text-white text-2xl leading-none flex items-center justify-center"
+        className="fixed right-4 z-[130] h-11 w-11 rounded-full bg-white/15 text-white text-2xl leading-none flex items-center justify-center active:bg-white/25"
         style={{ top: "max(1rem, env(safe-area-inset-top))" }}
       >
         ×
       </button>
-      <div
-        className="w-full h-full overflow-auto flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()}
-      >
+
+      <div className="min-h-full w-full flex items-center justify-center p-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt=""
-          onClick={() => setZoomed((z) => !z)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomed((z) => !z);
+          }}
           className={
             zoomed
               ? "max-w-none cursor-zoom-out"
-              : "max-w-full max-h-full object-contain cursor-zoom-in"
+              : "max-w-full max-h-[90vh] object-contain cursor-zoom-in"
           }
           style={zoomed ? { width: "200%" } : undefined}
         />
