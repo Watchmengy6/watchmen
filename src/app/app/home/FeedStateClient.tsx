@@ -31,12 +31,24 @@
  *     single `postProps` bundle so the page only threads them once.
  */
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
 import { FeedPostClient } from "./FeedPostClient";
 import { FeedComposer, type FeedComposerProps } from "@/components/feed/FeedComposer";
 import { PullToRefresh } from "@/components/feed/PullToRefresh";
-import { createPostAction, getFeedSliceAction } from "@/lib/feed/actions";
+import {
+  createPostAction,
+  getFeedSliceAction,
+  loadMoreFeedAction,
+} from "@/lib/feed/actions";
 
 // ---- Context ---------------------------------------------------------------
 
@@ -65,6 +77,12 @@ type FeedStateContextValue = {
    * Idempotent: removing an id that isn't in the list is a no-op.
    */
   removePost: (postId: string) => void;
+  /**
+   * Append older posts to the END of the feed (keyset pagination /
+   * infinite scroll). Dedupes by id so a pinned post that floated to the
+   * top of page 1 is never shown twice if it reappears in a later page.
+   */
+  appendPosts: (posts: FeedPostShape[]) => void;
 };
 
 const FeedStateContext = createContext<FeedStateContextValue | null>(null);
@@ -130,8 +148,18 @@ export function FeedStateProvider({
     setPosts((prev) => prev.filter((p) => p.id !== postId));
   }, []);
 
+  const appendPosts = useCallback((incoming: FeedPostShape[]) => {
+    setPosts((prev) => {
+      const seen = new Set(prev.map((p) => p.id));
+      const fresh = incoming.filter((p) => !seen.has(p.id));
+      return fresh.length ? [...prev, ...fresh] : prev;
+    });
+  }, []);
+
   return (
-    <FeedStateContext.Provider value={{ posts, prependPost, replacePosts, removePost }}>
+    <FeedStateContext.Provider
+      value={{ posts, prependPost, replacePosts, removePost, appendPosts }}
+    >
       {children}
     </FeedStateContext.Provider>
   );
@@ -161,7 +189,68 @@ export type FeedListPostProps = {
  * when the brotherhood hasn't shared anything yet.
  */
 export function FeedList({ postProps }: { postProps: FeedListPostProps }) {
-  const { posts } = useFeedState();
+  const { posts, appendPosts } = useFeedState();
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [done, setDone] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Ref guard so overlapping IntersectionObserver fires can't launch two
+  // concurrent page loads (which would race and could dupe/skip).
+  const inFlightRef = useRef(false);
+
+  const loadMore = useCallback(async () => {
+    if (inFlightRef.current || done || posts.length === 0) return;
+    const last = posts[posts.length - 1];
+    if (!last?.created_at || !last?.id) {
+      setDone(true);
+      return;
+    }
+    inFlightRef.current = true;
+    setLoadingMore(true);
+    try {
+      const r = await loadMoreFeedAction({
+        createdAt: last.created_at,
+        id: last.id,
+      });
+      if (r?.posts && r.posts.length > 0) appendPosts(r.posts);
+      // Stop when the server says there's no next cursor, returns nothing,
+      // or errors — so we never loop forever on an empty tail.
+      if (r?.error || !r?.posts || r.posts.length === 0 || !r.nextCursor) {
+        setDone(true);
+      }
+    } catch {
+      // Transient failure — stop auto-loading; the existing feed stays put.
+      setDone(true);
+    } finally {
+      setLoadingMore(false);
+      inFlightRef.current = false;
+    }
+  }, [posts, done, appendPosts]);
+
+  // Auto-load when the sentinel scrolls near the viewport. rootMargin gives
+  // a head start so the next page is fetched before the user hits the end.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || done) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: "600px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loadMore, done]);
+
+  // Reset the end-of-feed flag whenever the feed HEAD changes. A
+  // pull-to-refresh (replacePosts) or a new post prepended at the top
+  // starts a fresh pagination session, so a previously-reached end no
+  // longer applies — without this, reaching the end then refreshing would
+  // permanently disable infinite scroll until a hard reload. Keyed on the
+  // top post id (NOT length) so appending older pages doesn't re-trigger.
+  const topId = posts[0]?.id;
+  useEffect(() => {
+    setDone(false);
+  }, [topId]);
 
   if (posts.length === 0) {
     return (
@@ -185,6 +274,15 @@ export function FeedList({ postProps }: { postProps: FeedListPostProps }) {
           viewerProfileId={postProps.viewerProfileId}
         />
       ))}
+      {done ? (
+        <div className="py-6 text-center text-ink-500 text-[12px]">
+          You&apos;re all caught up.
+        </div>
+      ) : (
+        <div ref={sentinelRef} className="py-6 text-center text-ink-400 text-[13px]">
+          {loadingMore ? "Loading…" : ""}
+        </div>
+      )}
     </>
   );
 }

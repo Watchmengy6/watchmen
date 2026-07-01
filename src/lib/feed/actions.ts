@@ -831,6 +831,92 @@ export async function getFeedSliceAction(): Promise<{
   return { posts: shaped };
 }
 
+/**
+ * Load the next page of older feed posts via KEYSET (cursor) pagination —
+ * NOT offset. Given the last-seen post's (created_at, id), fetch the next
+ * `limit` posts strictly older than that cursor, newest-first, with an id
+ * tiebreak so posts sharing a timestamp are never dropped or duplicated.
+ * This uses the existing posts_created_idx and stays fast no matter how
+ * deep the user scrolls (offset pagination re-scans from row 0; this does
+ * not). Pinned posts already float to the top on the initial render; this
+ * pages the plain timeline older than the cursor, and the client dedupes
+ * by id, so a floated-up pinned post is never shown twice.
+ *
+ * Returns the page plus a nextCursor (null when there are no more posts).
+ * Post visibility (blocks / suspended authors) is enforced by RLS on the
+ * posts select, matching the initial home render.
+ */
+export async function loadMoreFeedAction(
+  cursor: { createdAt: string; id: string },
+  limit = 20,
+): Promise<{
+  posts?: FeedPostShape[];
+  nextCursor?: { createdAt: string; id: string } | null;
+  error?: string;
+}> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || me.status !== "approved") return { posts: [], nextCursor: null };
+
+  if (!cursor?.createdAt || !cursor?.id) return { posts: [], nextCursor: null };
+
+  const pageSize = Math.min(Math.max(limit, 1), 50);
+  // Keyset predicate: created_at < cursor OR (created_at = cursor AND id < cursor.id).
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select(POSTS_QUERY_SELECT)
+    .is("deleted_at", null)
+    .or(
+      `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+    )
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(pageSize);
+  if (error) return { error: error.message };
+
+  const rows = posts ?? [];
+  const postIds = rows.map((p: any) => p.id);
+  const { data: statsRows } = postIds.length
+    ? await supabase.rpc("home_feed_stats", {
+        p_post_ids: postIds,
+        p_viewer_id: me.id,
+      })
+    : { data: [] as any[] };
+
+  const statsByPost = new Map<string, FeedPostStats>();
+  (statsRows ?? []).forEach((s: any) => {
+    statsByPost.set(s.post_id, {
+      like_count: s.like_count ?? 0,
+      comment_count: s.comment_count ?? 0,
+      my_liked: !!s.my_liked,
+      my_poll_vote:
+        typeof s.my_poll_vote === "number" ? s.my_poll_vote : null,
+      poll_vote_counts: s.poll_vote_counts ?? null,
+    });
+  });
+
+  const shaped: FeedPostShape[] = rows.map((p: any) =>
+    mapToFeedPostShape(p, statsByPost.get(p.id) ?? null),
+  );
+
+  const last = rows[rows.length - 1] as any;
+  const nextCursor =
+    rows.length === pageSize && last
+      ? { createdAt: last.created_at as string, id: last.id as string }
+      : null;
+
+  return { posts: shaped, nextCursor };
+}
+
 /** Toggle a like on a post. */
 export async function toggleLikeAction(
   postId: string,
