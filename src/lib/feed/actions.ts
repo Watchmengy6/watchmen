@@ -68,6 +68,91 @@ export async function loadPostCommentsAction(
 }
 
 /**
+ * Edit a post's body. RLS ("posts author update", migration 00009) only
+ * permits the update when the caller is the post's author, so an
+ * unauthorized caller updates 0 rows. The `posts_touch_updated_at`
+ * trigger (00010) bumps updated_at automatically, which the UI uses to
+ * show an "edited" label. Returns the saved body on success.
+ */
+export async function editPostAction(
+  postId: string,
+  body: string,
+): Promise<{ body?: string; error?: string }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const trimmed = body.trim();
+  if (!trimmed) return { error: "Post can't be empty." };
+  if (trimmed.length > 5000) return { error: "Post is too long (5000 char max)." };
+
+  const { data: row, error } = await supabase
+    .from("posts")
+    .update({ body: trimmed })
+    .eq("id", postId)
+    .select("id, body")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!row) return { error: "You can only edit your own posts." };
+  return { body: row.body };
+}
+
+/**
+ * AI proofread — fixes spelling/grammar/punctuation in a draft while
+ * preserving the author's voice, line breaks, emojis, and @mentions.
+ * Gated on OPENAI_API_KEY; the composer only shows the button when
+ * NEXT_PUBLIC_AI_PROOFREAD === "1". Uses gpt-4o-mini (cheap). If you'd
+ * rather use Anthropic, swap the endpoint/body below.
+ */
+export async function proofreadTextAction(
+  text: string,
+): Promise<{ text?: string; error?: string }> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return { error: "Proofreading isn't set up yet." };
+
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const trimmed = text.trim();
+  if (!trimmed) return { error: "Nothing to proofread." };
+  if (trimmed.length > 5000) return { error: "Too long to proofread (5000 char max)." };
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a proofreader for short social posts. Fix spelling, grammar, capitalization, and punctuation. Preserve the author's voice, meaning, line breaks, emojis, and any @mentions or #hashtags exactly as written. Do not add new sentences, hashtags, links, or commentary. Return ONLY the corrected text with no quotes or preamble.",
+          },
+          { role: "user", content: trimmed },
+        ],
+      }),
+    });
+    if (!res.ok) return { error: "Proofread failed. Try again." };
+    const data = await res.json();
+    const out = data?.choices?.[0]?.message?.content?.trim();
+    if (!out) return { error: "Proofread failed. Try again." };
+    return { text: out };
+  } catch {
+    return { error: "Proofread failed. Try again." };
+  }
+}
+
+/**
  * Delete a comment. The RLS policy "post_comments author delete"
  * (migration 00009) only permits the delete when the caller is the
  * comment's author OR an admin, so we rely on the database to enforce

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { uploadMedia } from "@/lib/uploads/client";
-import { listMentionableMembers } from "@/lib/feed/actions";
+import { listMentionableMembers, proofreadTextAction } from "@/lib/feed/actions";
 
 // Meetup composer type removed per Dustin — informal coordination
 // happens via plain posts now, not a dedicated meetup type. The
@@ -65,6 +65,7 @@ export function FeedComposer({
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [polishing, setPolishing] = useState(false);
   // Member-meetup fields (only used when type === "meetup")
   const [meetupWhen, setMeetupWhen] = useState("");
   const [meetupWhere, setMeetupWhere] = useState("");
@@ -187,6 +188,19 @@ export function FeedComposer({
     setMediaType(result.mediaType);
     // Reset input so the same file can be picked again later.
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function handlePolish() {
+    if (polishing || !text.trim()) return;
+    setPolishing(true);
+    setErr(null);
+    const r = await proofreadTextAction(text);
+    setPolishing(false);
+    if ("error" in r && r.error) {
+      setErr(r.error);
+      return;
+    }
+    if (r.text) setText(r.text);
   }
 
   function handlePost() {
@@ -365,6 +379,9 @@ export function FeedComposer({
                 syncMentionQuery(t.value, t.selectionStart ?? t.value.length);
               }}
               rows={3}
+              spellCheck
+              autoCapitalize="sentences"
+              autoCorrect="on"
               placeholder={
                 type === "job"
                   ? "Describe the role, location, and how to reach you. Tag with @"
@@ -505,6 +522,20 @@ export function FeedComposer({
                   <path d="M20 12 12 4H5a1 1 0 0 0-1 1v7l8 8a1 1 0 0 0 1.4 0l6.6-6.6a1 1 0 0 0 0-1.4Z" />
                   <circle cx="8.5" cy="8.5" r="1" fill="currentColor" />
                 </svg>
+              </button>
+            ) : null}
+            {/* AI proofread — only shown when NEXT_PUBLIC_AI_PROOFREAD="1"
+                (and OPENAI_API_KEY is set server-side). Non-poll only. */}
+            {type !== "poll" &&
+            process.env.NEXT_PUBLIC_AI_PROOFREAD === "1" ? (
+              <button
+                type="button"
+                onClick={handlePolish}
+                disabled={polishing || !text.trim()}
+                className="h-9 px-3 rounded-full bg-ink-900/60 hairline text-ink-200 text-[12px] font-medium inline-flex items-center gap-1.5 disabled:opacity-40"
+                aria-label="Proofread with AI"
+              >
+                {polishing ? "Polishing…" : "✨ Polish"}
               </button>
             ) : null}
             <div className="flex-1" />

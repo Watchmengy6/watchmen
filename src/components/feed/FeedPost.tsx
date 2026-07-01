@@ -15,6 +15,7 @@ import { ReportButton } from "@/components/moderation/ReportButton";
 import { AdminDeletePostButton } from "@/components/feed/AdminDeletePostButton";
 import { AdminPinPostButton } from "@/components/feed/AdminPinPostButton";
 import { DeleteOwnPostButton } from "@/components/feed/DeleteOwnPostButton";
+import { ImageLightbox } from "@/components/feed/ImageLightbox";
 import { FeedPollWidget } from "@/components/feed/FeedPollWidget";
 import { relativeTime } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
@@ -99,6 +100,11 @@ export interface FeedPostProps {
   ) => Promise<{ comment?: FeedPostComment; error?: string } | void>;
   /** Delete a comment by id. Author-or-admin is enforced server-side. */
   onDeleteComment?: (commentId: string) => Promise<{ error?: string } | void>;
+  /** Edit a post body (author only, enforced server-side). Returns saved body. */
+  onEditPost?: (
+    postId: string,
+    body: string,
+  ) => Promise<{ body?: string; error?: string } | void>;
   meName?: string;
   meAvatar?: string | null;
   /** Members the user can @mention in a comment. */
@@ -122,6 +128,7 @@ export function FeedPost({
   onToggleLike,
   onAddComment,
   onDeleteComment,
+  onEditPost,
   meName,
   meAvatar,
   mentionablePeople = [],
@@ -130,6 +137,13 @@ export function FeedPost({
   viewerProfileId,
 }: FeedPostProps) {
   const isAuthor = !!viewerProfileId && post.author?.id === viewerProfileId;
+  // Local copy of the body so an inline edit updates instantly without a
+  // full feed refetch. editing toggles the inline editor; lightboxSrc
+  // drives the full-screen image viewer.
+  const [body, setBody] = useState(post.body);
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState(post.body ?? "");
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likes, setLikes] = useState(post.likes);
   const [comments, setComments] = useState<FeedPostComment[]>(
@@ -273,6 +287,21 @@ export function FeedPost({
     });
   }
 
+  function saveEdit() {
+    if (!onEditPost) return;
+    const next = editDraft.trim();
+    if (!next) return;
+    startTransition(async () => {
+      const r = await onEditPost(post.id, next);
+      if (r && "error" in r && r.error) {
+        return; // keep the editor open so they can retry
+      }
+      const saved = r && "body" in r && r.body ? r.body : next;
+      setBody(saved);
+      setEditing(false);
+    });
+  }
+
   function handleDeleteComment(commentId: string) {
     if (!onDeleteComment) return;
     if (typeof window !== "undefined" && !window.confirm("Delete this comment?")) {
@@ -359,12 +388,45 @@ export function FeedPost({
             force long unbroken URLs / handles to wrap inside the card —
             without this they push the card width past the viewport and
             iOS lets the whole page rubber-band sideways. */}
-        {post.body ? (
+        {editing ? (
+          <div className="px-4 pt-3">
+            <textarea
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              rows={4}
+              spellCheck
+              autoCapitalize="sentences"
+              autoCorrect="on"
+              className="w-full rounded-xl bg-ink-900/60 hairline px-3 py-2.5 text-[15px] text-white outline-none focus:ring-2 focus:ring-gold-400/30 resize-none break-words"
+              style={{ overflowWrap: "anywhere" }}
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={pending || !editDraft.trim()}
+                className="h-8 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black disabled:opacity-40"
+              >
+                {pending ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setEditDraft(body ?? "");
+                }}
+                className="h-8 px-3 rounded-full text-[13px] text-ink-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : body ? (
           <div
             className="px-4 pt-3 text-[15px] text-ink-100 leading-relaxed whitespace-pre-wrap break-words"
             style={{ overflowWrap: "anywhere" }}
           >
-            <RichText text={post.body} blockedUsernames={blockedUsernames} />
+            <RichText text={body} blockedUsernames={blockedUsernames} />
           </div>
         ) : null}
 
@@ -434,7 +496,8 @@ export function FeedPost({
               alt=""
               loading="lazy"
               decoding="async"
-              className="mt-3 block w-full max-w-full max-h-[420px] object-cover"
+              onClick={() => setLightboxSrc(post.image_url!)}
+              className="mt-3 block w-full max-w-full max-h-[420px] object-cover cursor-zoom-in"
             />
           )
         ) : (
@@ -492,6 +555,18 @@ export function FeedPost({
               hammer (red icon, service-role bypass) used for moderation; the
               author button is shown to non-admin authors only so the action
               row doesn't double up for an admin viewing their own post. */}
+          {isAuthor && onEditPost && !editing ? (
+            <button
+              type="button"
+              onClick={() => {
+                setEditDraft(body ?? "");
+                setEditing(true);
+              }}
+              className="px-3 h-9 text-ink-400 text-[12px] hover:text-white"
+            >
+              Edit
+            </button>
+          ) : null}
           {isAuthor && !isAdmin ? <DeleteOwnPostButton postId={post.id} /> : null}
           {isAdmin ? <AdminDeletePostButton postId={post.id} /> : null}
         </div>
@@ -569,6 +644,9 @@ export function FeedPost({
                     }}
                     placeholder="Add a comment…"
                     rows={1}
+                    spellCheck
+                    autoCapitalize="sentences"
+                    autoCorrect="on"
                     className="flex-1 min-w-0 resize-none max-h-32 rounded-2xl bg-ink-800 hairline px-3 py-2 text-[14px] leading-snug text-white placeholder:text-ink-400 outline-none focus:ring-2 focus:ring-gold-400/30 break-words"
                     style={{ overflowWrap: "anywhere" }}
                   />
@@ -613,6 +691,9 @@ export function FeedPost({
           </div>
         ) : null}
       </CardBody>
+      {lightboxSrc ? (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      ) : null}
     </Card>
   );
 }
