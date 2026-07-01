@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushToAdmins } from "@/lib/push/send";
 
 export type ReportTarget =
@@ -134,11 +134,7 @@ export async function suspendUserAction(
     return { error: "Admin only." };
   }
 
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
+  const admin = supabaseAdmin();
   const { error } = await admin
     .from("profiles")
     .update({ status: "rejected" })

@@ -1,6 +1,6 @@
 import "server-only";
 import webpush from "web-push";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 let configured = false;
 
@@ -63,11 +63,7 @@ async function getApnsProvider(): Promise<any | null> {
 }
 
 function svc() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
+  return supabaseAdmin();
 }
 
 export interface PushPayload {

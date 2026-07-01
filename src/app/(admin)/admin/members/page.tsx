@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -11,13 +11,6 @@ export const dynamic = "force-dynamic";
 // Service-role client. Use ONLY in admin-gated server components where we
 // need to read columns (email, etc.) that are revoked from the authenticated
 // role. requireAdmin() above gates access — we're trusting the admin.
-function supabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-}
 
 export default async function AdminMembersPage({
   searchParams,

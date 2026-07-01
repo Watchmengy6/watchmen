@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser } from "@/lib/push/send";
@@ -107,11 +107,7 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   // recipient's push to deliver before being redirected to the meetup.
   void (async () => {
     try {
-      const admin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } },
-      );
+      const admin = supabaseAdmin();
       const [{ data: approved }, { data: hostProfile }] = await Promise.all([
         admin.from("profiles").select("id").eq("status", "approved"),
         admin.from("profiles").select("full_name").eq("id", me.id).maybeSingle(),

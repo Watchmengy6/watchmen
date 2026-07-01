@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteGroupButton } from "./DeleteGroupButton";
@@ -16,13 +16,6 @@ export const dynamic = "force-dynamic";
  * non-member private groups). Page is admin-gated upstream by
  * requireAdmin() so this is safe.
  */
-function supabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-}
 
 function fmtCreated(s: string | null | undefined): string {
   if (!s) return "";

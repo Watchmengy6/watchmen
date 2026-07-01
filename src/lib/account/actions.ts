@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**
@@ -36,11 +36,7 @@ export async function deleteMyAccountAction(): Promise<{ error?: string }> {
   // 2. Remove the auth row so future logins fail. Needs service role
   // because regular users don't have permission on the auth schema.
   try {
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    );
+    const admin = supabaseAdmin();
     const { error: delErr } = await admin.auth.admin.deleteUser(user.id);
     if (delErr) {
       // Profile is already scrubbed at this point — log but proceed

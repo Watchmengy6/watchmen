@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
 import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
@@ -279,11 +279,7 @@ export async function adminTogglePinPostAction(
 
   // Service-role write so the column update can't be blocked by any
   // tightened post update policy in the future.
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
+  const admin = supabaseAdmin();
   const { data: cur } = await admin
     .from("posts")
     .select("pinned")
@@ -366,11 +362,7 @@ export async function adminDeletePostAction(
   }
 
   // Use service-role so we cleanly bypass any RLS on the update column.
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
+  const admin = supabaseAdmin();
   const { error } = await admin
     .from("posts")
     .update({ deleted_at: new Date().toISOString() })

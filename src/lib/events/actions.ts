@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
 import type { RsvpStatus } from "@/types/database";
@@ -175,11 +175,7 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
   // every push delivery before the action returns.
   void (async () => {
     try {
-      const admin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } },
-      );
+      const admin = supabaseAdmin();
       const { data: approved } = await admin
         .from("profiles")
         .select("id")
