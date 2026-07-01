@@ -4,6 +4,40 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
+import { signChatMediaUrl } from "@/lib/uploads/signChatMedia";
+
+/**
+ * Mint a temporary signed URL for a chat message's media. Takes the
+ * message id (NOT a caller-supplied URL) and resolves the media_url from
+ * the thread_messages row itself, scoped to threadId. thread_messages RLS
+ * only returns the row to an approved member of that thread, so this both
+ * AUTHORIZES the caller and BINDS the media to the thread — a member of
+ * thread A cannot sign media belonging to thread B. Used by
+ * ThreadChatClient for realtime-incoming media (page loaders + pagination
+ * sign their own batches server-side).
+ */
+export async function signThreadMediaAction(
+  threadId: string,
+  messageId: string,
+): Promise<{ url?: string; error?: string }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: msg } = await supabase
+    .from("thread_messages")
+    .select("media_url")
+    .eq("id", messageId)
+    .eq("thread_id", threadId)
+    .maybeSingle();
+  if (!msg?.media_url) return { error: "No media." };
+
+  const url = await signChatMediaUrl(msg.media_url);
+  if (!url) return { error: "No media." };
+  return { url };
+}
 
 /** Start (or open) a DM thread with the given member. */
 export async function startDmAction(formData: FormData) {

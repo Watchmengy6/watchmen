@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { signMessagesMedia } from "@/lib/uploads/signChatMedia";
 
 export interface OlderMessage {
   id: string;
@@ -53,7 +54,7 @@ export async function loadOlderThreadMessagesAction(input: {
   const hasMore = rows.length > limit;
   const trimmed = hasMore ? rows.slice(0, limit) : rows;
   // Return oldest-first so the caller can prepend in display order.
-  const messages: OlderMessage[] = trimmed
+  const mapped: OlderMessage[] = trimmed
     .slice()
     .reverse()
     .map((m: any) => {
@@ -69,5 +70,8 @@ export async function loadOlderThreadMessagesAction(input: {
         author_photo: a?.profile_photo_url ?? null,
       };
     });
+  // P0.2 — sign chat media so older-message images load under the private
+  // bucket (mirrors the page loaders).
+  const messages = await signMessagesMedia(mapped);
   return { messages, hasMore };
 }

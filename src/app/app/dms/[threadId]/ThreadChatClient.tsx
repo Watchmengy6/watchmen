@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
-import { sendThreadMessageAction } from "@/lib/dms/actions";
+import { sendThreadMessageAction, signThreadMediaAction } from "@/lib/dms/actions";
 import { loadOlderThreadMessagesAction } from "@/lib/dms/pagination";
 import { createBrowserClient } from "@supabase/ssr";
 import { uploadMedia } from "@/lib/uploads/client";
@@ -127,6 +127,19 @@ export function ThreadChatClient({
         },
         async (payload) => {
           const m: any = payload.new;
+          // P0.2 — chat-media is private; the stored media_url won't load
+          // directly. Mint a membership-checked signed URL for any image/
+          // video before rendering. Fall back to the raw value on failure.
+          let signedMediaUrl: string | null = m.media_url ?? null;
+          if (
+            m.media_url &&
+            (m.media_type === "image" || m.media_type === "video")
+          ) {
+            // Sign by message id (server resolves the media from the row,
+            // scoped to this thread) — never trust a client-supplied path.
+            const s = await signThreadMediaAction(threadId, m.id);
+            if (s.url) signedMediaUrl = s.url;
+          }
           // If this insert is from ME, reconcile in FIFO order: pop the
           // oldest pending local id and replace that exact placeholder.
           if (m.author_id === meId) {
@@ -142,7 +155,7 @@ export function ThreadChatClient({
                       {
                         id: m.id,
                         body: m.body ?? "",
-                        media_url: m.media_url ?? null,
+                        media_url: signedMediaUrl,
                         media_type: (m.media_type ?? "none") as "none" | "image" | "video",
                         created_at: m.created_at,
                         author_id: m.author_id,
@@ -161,7 +174,7 @@ export function ThreadChatClient({
               next[idx] = {
                 id: m.id,
                 body: m.body ?? "",
-                media_url: m.media_url ?? null,
+                media_url: signedMediaUrl,
                 media_type: (m.media_type ?? "none") as "none" | "image" | "video",
                 created_at: m.created_at,
                 author_id: m.author_id,
@@ -195,7 +208,7 @@ export function ThreadChatClient({
             {
               id: m.id,
               body: m.body ?? "",
-              media_url: m.media_url ?? null,
+              media_url: signedMediaUrl,
               media_type: (m.media_type ?? "none") as "none" | "image" | "video",
               created_at: m.created_at,
               author_id: m.author_id,
@@ -271,12 +284,15 @@ export function ThreadChatClient({
     // The thread_messages -> threads.last_message_preview trigger copies the
     // body straight into the inbox list, so this is what brothers will see.
     const preview = isImage ? "📷 Photo" : "🎥 Video";
+    // P0.2 — show the picked file locally for an instant preview (no bucket
+    // dependency); the realtime echo replaces this row with a signed URL.
+    const localPreviewUrl = URL.createObjectURL(file);
     setMessages((prev) => [
       ...prev,
       {
         id: localId,
         body: preview,
-        media_url: result.url,
+        media_url: localPreviewUrl,
         media_type: result.mediaType,
         created_at: new Date().toISOString(),
         author_id: meId,

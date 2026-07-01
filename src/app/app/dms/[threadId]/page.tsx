@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
 import { ThreadChatClient } from "./ThreadChatClient";
 import { markThreadReadAction } from "@/lib/dms/actions";
+import { signMessagesMedia } from "@/lib/uploads/signChatMedia";
 import { BackButton } from "@/components/ui/BackButton";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,9 @@ export default async function DmThreadPage({
       is_me: m.author_id === profile.id,
     };
   });
+  // P0.2 — replace stored (public-URL) chat media with short-lived signed
+  // URLs so the private bucket's images still load.
+  const adaptedSigned = await signMessagesMedia(adapted);
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-ink-900 flex flex-col">
@@ -105,7 +109,7 @@ export default async function DmThreadPage({
 
       <ThreadChatClient
         threadId={thread.id}
-        initialMessages={adapted}
+        initialMessages={adaptedSigned}
         meId={profile.id}
         meName={profile.full_name}
         meAvatar={profile.profile_photo_url}

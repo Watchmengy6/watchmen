@@ -4,6 +4,7 @@ import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ThreadChatClient } from "@/app/app/dms/[threadId]/ThreadChatClient";
 import { markThreadReadAction } from "@/lib/dms/actions";
+import { signMessagesMedia } from "@/lib/uploads/signChatMedia";
 import { BackButton } from "@/components/ui/BackButton";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,8 @@ export default async function EventChatPage({
       is_me: m.author_id === profile.id,
     };
   });
+  // P0.2 — sign chat media so the private bucket's images still load.
+  const adaptedSigned = await signMessagesMedia(adapted);
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-ink-900 flex flex-col">
@@ -109,7 +112,7 @@ export default async function EventChatPage({
 
       <ThreadChatClient
         threadId={thread.id}
-        initialMessages={adapted}
+        initialMessages={adaptedSigned}
         meId={profile.id}
         meName={profile.full_name}
         meAvatar={profile.profile_photo_url}
