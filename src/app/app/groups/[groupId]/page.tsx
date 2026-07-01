@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
+import { ZoomableImage } from "@/components/ui/ZoomableImage";
 import { joinGroupAction, leaveGroupAction } from "@/lib/groups/actions";
 
 export const dynamic = "force-dynamic";
@@ -72,11 +73,9 @@ export default async function GroupDetail({
         {/* Hero */}
         {group.cover_url ? (
           <div className="rounded-2xl overflow-hidden ring-1 ring-gold-500/30">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <ZoomableImage
               src={group.cover_url}
-              alt=""
-              className="w-full aspect-square object-cover"
+              className="w-full aspect-square object-cover cursor-zoom-in"
             />
             <div className="bg-gradient-to-br from-gold-500/15 via-gold-700/5 to-transparent p-5">
               <div className="text-white text-[20px] font-semibold">{group.name}</div>

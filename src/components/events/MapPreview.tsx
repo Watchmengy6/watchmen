@@ -17,20 +17,21 @@ export function MapPreview({
   /** Plain address string — used as a fallback when lat/lng aren't set. */
   address?: string | null;
 }) {
-  // Prefer coordinates; fall back to a text-based search so the CTA still works.
+  // Prefer coordinates; fall back to an address search, then to the venue
+  // name, so a named location like "Central Park St.Pete" is still tappable
+  // even without coords/address.
   const hasCoords = lat != null && lng != null;
+  const searchText = address || label || null;
   const href = hasCoords
     ? `https://maps.apple.com/?q=${lat},${lng}`
-    : address
-      ? `https://maps.apple.com/?q=${encodeURIComponent(address)}`
+    : searchText
+      ? `https://maps.apple.com/?q=${encodeURIComponent(searchText)}`
       : null;
 
+  // No location info at all — render nothing rather than a big empty
+  // "Location not set" box that looks broken.
   if (!href) {
-    return (
-      <div className="rounded-xl bg-ink-800 hairline h-32 flex items-center justify-center text-ink-400 text-sm">
-        Location not set
-      </div>
-    );
+    return null;
   }
 
   return (

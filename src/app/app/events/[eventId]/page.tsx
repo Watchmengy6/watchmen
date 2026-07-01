@@ -11,6 +11,7 @@ import { MapPreview } from "@/components/events/MapPreview";
 import { Button } from "@/components/ui/Button";
 import { fmtEventDate, fmtTime } from "@/lib/utils/date";
 import { ShareEventButton } from "@/components/events/ShareEventButton";
+import { ZoomableImage } from "@/components/ui/ZoomableImage";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +45,11 @@ export default async function EventDetail({ params }: { params: { eventId: strin
   return (
     <div className="pt-2 pb-10">
       {event.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={event.image_url} alt={event.title} className="w-full h-auto block" />
+        <ZoomableImage
+          src={event.image_url}
+          alt={event.title}
+          className="w-full h-auto block cursor-zoom-in"
+        />
       ) : (
         <div className="h-52 bg-gradient-to-br from-ink-700 to-ink-900 flex items-center justify-center">
           <span className="text-gradient-gold text-2xl font-semibold">{event.title}</span>
