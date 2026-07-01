@@ -1,5 +1,13 @@
-// Manually maintained types. After your first migration you can replace this
-// with `supabase gen types typescript --linked > src/types/database.ts`.
+// Real schema types are generated into ./database.generated.ts via
+//   npx supabase gen types typescript --project-id <ref> --schema public
+// `Database` is re-exported here for INCREMENTAL adoption (type a specific
+// query/module as needed). It is NOT yet wired as the generic on the
+// Supabase client factories: doing that globally surfaced ~429 pre-existing
+// type mismatches (client/postgrest-js version + this codebase's untyped
+// query style), so a global switch needs a dedicated refactor. Adopt per
+// call-site. The hand-written enums + interfaces below remain for existing
+// imports and narrow union typing.
+export type { Database, Json } from "./database.generated";
 
 export type UserRole = "super_admin" | "admin" | "member";
 export type UserStatus = "pending" | "approved" | "rejected";
