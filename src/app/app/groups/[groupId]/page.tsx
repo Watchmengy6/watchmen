@@ -4,6 +4,7 @@ import { requireApproved } from "@/lib/auth/gates";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
 import { ZoomableImage } from "@/components/ui/ZoomableImage";
+import { BackButton } from "@/components/ui/BackButton";
 import { joinGroupAction, leaveGroupAction } from "@/lib/groups/actions";
 
 export const dynamic = "force-dynamic";
@@ -51,13 +52,10 @@ export default async function GroupDetail({
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-3 px-3 py-2.5">
-          <Link
-            href="/app/groups"
-            aria-label="Back"
+          <BackButton
+            fallbackHref="/app/groups"
             className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-ink-800 hairline text-ink-100 text-lg"
-          >
-            ‹
-          </Link>
+          />
           <div className="flex-1 min-w-0">
             <div className="text-white text-[16px] font-semibold leading-tight truncate">
               {group.name}

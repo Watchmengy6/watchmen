@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { fmtEventDate, fmtTime } from "@/lib/utils/date";
 import { ShareEventButton } from "@/components/events/ShareEventButton";
 import { ZoomableImage } from "@/components/ui/ZoomableImage";
+import { BackButton } from "@/components/ui/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -44,17 +45,29 @@ export default async function EventDetail({ params }: { params: { eventId: strin
 
   return (
     <div className="pt-2 pb-10">
-      {event.image_url ? (
-        <ZoomableImage
-          src={event.image_url}
-          alt={event.title}
-          className="w-full h-auto block cursor-zoom-in"
-        />
-      ) : (
-        <div className="h-52 bg-gradient-to-br from-ink-700 to-ink-900 flex items-center justify-center">
-          <span className="text-gradient-gold text-2xl font-semibold">{event.title}</span>
+      <div className="relative">
+        {event.image_url ? (
+          <ZoomableImage
+            src={event.image_url}
+            alt={event.title}
+            className="w-full h-auto block cursor-zoom-in"
+          />
+        ) : (
+          <div className="h-52 bg-gradient-to-br from-ink-700 to-ink-900 flex items-center justify-center">
+            <span className="text-gradient-gold text-2xl font-semibold">{event.title}</span>
+          </div>
+        )}
+        {/* Floating back button over the hero (event pages have no header). */}
+        <div
+          className="absolute left-3 z-10"
+          style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
+        >
+          <BackButton
+            fallbackHref="/app/events"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-black/50 backdrop-blur text-white text-2xl leading-none"
+          />
         </div>
-      )}
+      </div>
 
       <div className="px-5 mt-5 space-y-4">
         <div>
