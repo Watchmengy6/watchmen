@@ -176,9 +176,10 @@ export function FeedComposer({
     if (!file) return;
     setUploading(true);
     setErr(null);
-    // Feed photos are auto-fit to a square so the feed stays uniform.
-    // (uploadMedia only applies the crop to images; videos pass through.)
-    const result = await uploadMedia(file, { aspect: { w: 1, h: 1 } });
+    // Feed photos upload at their natural aspect ratio (no square crop) so
+    // flyers/graphics with text aren't cut off — the feed renders them with
+    // h-auto. (uploadMedia still downscales/compresses; it just doesn't crop.)
+    const result = await uploadMedia(file);
     setUploading(false);
     if ("error" in result) {
       setErr(result.error);
@@ -450,7 +451,7 @@ export function FeedComposer({
                 <img
                   src={mediaUrl}
                   alt=""
-                  className="block w-full max-w-full max-h-72 rounded-xl object-cover"
+                  className="block w-full max-w-full max-h-72 rounded-xl object-contain"
                 />
               ) : (
                 <video

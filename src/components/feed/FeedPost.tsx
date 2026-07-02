@@ -497,7 +497,7 @@ export function FeedPost({
               loading="lazy"
               decoding="async"
               onClick={() => setLightboxSrc(post.image_url!)}
-              className="mt-3 block w-full max-w-full max-h-[420px] object-cover cursor-zoom-in"
+              className="mt-3 block w-full max-w-full h-auto cursor-zoom-in"
             />
           )
         ) : (
