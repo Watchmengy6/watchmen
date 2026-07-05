@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -95,7 +96,7 @@ export async function sendThreadMessageAction(
   // instantly; push delivery happens in the background. Wrapped in an
   // IIFE that owns its own try/catch so unhandled rejections can't
   // crash the request.
-  void (async () => {
+  runInBackground(async () => {
     try {
       // Three independent fetches — parallelize. Previously serial,
       // which stretched push fan-out latency by ~150-300ms on slow
@@ -178,7 +179,7 @@ export async function sendThreadMessageAction(
     } catch (e) {
       console.warn("[dm] push notify failed (non-fatal)", e);
     }
-  })();
+  });
 
   revalidatePath(`/app/dms/${threadId}`);
   return {};

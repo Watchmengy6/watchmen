@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -58,7 +59,7 @@ export async function fileReportAction(input: {
 
   // Fire-and-forget admin push so leadership sees the report land in
   // real time. The /admin/reports queue is the deep-link target.
-  void (async () => {
+  runInBackground(async () => {
     try {
       await sendPushToAdmins({
         title: "New report filed",
@@ -69,7 +70,7 @@ export async function fileReportAction(input: {
     } catch (e) {
       console.warn("[reports] admin push failed (non-fatal)", e);
     }
-  })();
+  });
 
   return { success: true };
 }

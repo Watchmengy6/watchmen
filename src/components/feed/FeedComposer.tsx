@@ -549,8 +549,13 @@ export function FeedComposer({
             </button>
             <button
               onClick={handlePost}
+              // `uploading` in the guard: posting while a photo upload
+              // was still in flight submitted with media_url=null and
+              // silently DROPPED the photo (final pre-launch audit,
+              // July 2026 — guaranteed to happen on event-night cell data).
               disabled={
                 pending ||
+                uploading ||
                 (type === "poll"
                   ? !pollQuestion.trim() ||
                     pollOptions.filter((o) => o.trim()).length < 2
@@ -558,7 +563,7 @@ export function FeedComposer({
               }
               className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black disabled:opacity-40"
             >
-              {pending ? "Posting…" : "Post"}
+              {pending ? "Posting…" : uploading ? "Uploading…" : "Post"}
             </button>
           </div>
 

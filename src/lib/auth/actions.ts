@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -112,7 +113,25 @@ export async function signupAction(_prev: unknown, formData: FormData) {
       },
     },
   });
-  if (error) return { error: error.message };
+  if (error) {
+    // Translate the two errors 200 strangers WILL hit on event night
+    // into plain instructions instead of Supabase jargon
+    // (final pre-launch audit, July 2026).
+    const msg = error.message ?? "";
+    if (/already registered|already exists|duplicate/i.test(msg)) {
+      return {
+        error:
+          "That email already has an account. Go back and sign in instead — or use “Forgot password?” on the sign-in screen.",
+      };
+    }
+    if ((error as { status?: number }).status === 429 || /rate limit|too many/i.test(msg)) {
+      return {
+        error:
+          "A lot of brothers are signing up right now. Wait a minute and tap Submit again — your info is still filled in.",
+      };
+    }
+    return { error: msg };
+  }
 
   // Truly fire-and-forget: detach the admin email + push + applicant
   // confirmation email so slow provider latency never delays the new
@@ -120,7 +139,7 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   // fileReportAction.) Admin email goes only if RESEND_ADMIN_NOTIFY_TO
   // is set; the push to admins and the confirmation email to the new
   // signup fire regardless.
-  void (async () => {
+  runInBackground(async () => {
     try {
       const adminInbox = process.env.RESEND_ADMIN_NOTIFY_TO;
       if (adminInbox) {
@@ -153,7 +172,7 @@ export async function signupAction(_prev: unknown, formData: FormData) {
     } catch (e) {
       console.warn("[signup] admin notify failed (non-fatal)", e);
     }
-  })();
+  });
 
   // The trigger creates the profile as pending. Take them to /pending.
   redirect("/pending");

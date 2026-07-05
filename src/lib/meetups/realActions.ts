@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -105,7 +106,7 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
 
   // Fire-and-forget push fan-out — the host shouldn't wait for every
   // recipient's push to deliver before being redirected to the meetup.
-  void (async () => {
+  runInBackground(async () => {
     try {
       const admin = supabaseAdmin();
       const [{ data: approved }, { data: hostProfile }] = await Promise.all([
@@ -141,7 +142,7 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
     } catch (e) {
       console.warn("[createMeetupAction] push notify failed (non-fatal)", e);
     }
-  })();
+  });
 
   revalidatePath("/app/meetups");
   revalidatePath("/app/home");

@@ -6,6 +6,7 @@ import { Logo } from "@/components/brand/Logo";
 import { logoutAction } from "@/lib/auth/actions";
 import { WebOnly } from "@/components/util/WebOnly";
 import { EnablePushButton } from "@/components/push/EnablePushButton";
+import { PendingAutoRefresh } from "./PendingAutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,11 @@ export default async function PendingPage() {
 
   return (
     <main className="min-h-[100dvh] flex flex-col items-center justify-center px-6 text-center safe-top safe-bottom">
+      {/* Polls approval every 8s (paused when backgrounded) — the
+          moment an admin approves, the redirect above fires and the
+          member lands in the app without touching anything. Skipped
+          for rejected members (nothing to poll for). */}
+      {!rejected ? <PendingAutoRefresh /> : null}
       <div className="flex justify-center mb-5">
         <Logo className="h-16 w-16 text-gold-400" />
       </div>

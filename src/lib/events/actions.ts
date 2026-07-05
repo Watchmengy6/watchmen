@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -45,7 +46,7 @@ export async function rsvpAction(eventId: string, status: RsvpStatus) {
   const awardedPoints = !wasGoing && status === "going";
 
   // Super-admin firehose. Skip if Dustin is RSVPing his own event.
-  void (async () => {
+  runInBackground(async () => {
     try {
       const {
         data: { user },
@@ -74,7 +75,7 @@ export async function rsvpAction(eventId: string, status: RsvpStatus) {
     } catch (e) {
       console.warn("[event.rsvp] super-admin push failed", e);
     }
-  })();
+  });
 
   revalidatePath(`/app/events/${eventId}`);
   revalidatePath(`/app/events`);
@@ -173,7 +174,7 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
 
   // Fire-and-forget push fan-out — don't make the creator wait for
   // every push delivery before the action returns.
-  void (async () => {
+  runInBackground(async () => {
     try {
       const admin = supabaseAdmin();
       const { data: approved } = await admin
@@ -199,7 +200,10 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
                   title: pushTitle,
                   body: pushBody,
                   url: targetUrl,
-                  tag: "event-new",
+                  // Unique per event — a shared "event-new" tag made
+                  // back-to-back announcements REPLACE each other in
+                  // the notification tray (final pre-launch audit).
+                  tag: `event-new:${insertedEvent.id}`,
                 },
               }),
             ),
@@ -208,7 +212,7 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
     } catch (e) {
       console.warn("[events.create] push notify failed (non-fatal)", e);
     }
-  })();
+  });
 
   revalidatePath("/app/events");
   revalidatePath("/admin/events");

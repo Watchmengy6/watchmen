@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -53,7 +54,7 @@ export async function approveMemberAction(profileId: string) {
   if (target?.auth_user_id) {
     const targetAuthUserId = target.auth_user_id;
     const targetName = target.full_name ?? "Brother";
-    void (async () => {
+    runInBackground(async () => {
       try {
         const admin = supabaseAdmin();
         const { data: userRes } = await admin.auth.admin.getUserById(targetAuthUserId);
@@ -74,7 +75,7 @@ export async function approveMemberAction(profileId: string) {
       } catch (e) {
         console.warn("[approve] welcome email/push failed (non-fatal)", e);
       }
-    })();
+    });
   }
 
   return { success: true };

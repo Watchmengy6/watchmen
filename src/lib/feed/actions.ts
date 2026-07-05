@@ -1,4 +1,5 @@
 "use server";
+import { runInBackground } from "@/lib/utils/background";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -304,10 +305,14 @@ export async function votePollAction(input: {
   if (error) return { error: error.message };
 
   // Super-admin firehose: low-signal but Dustin asked for it.
-  void (async () => {
+  runInBackground(async () => {
     try {
-      const optionLabel =
+      const rawLabel =
         (post.poll_options as string[])[input.optionIndex] ?? "an option";
+      // Cap the pushed label — APNs rejects oversized payloads silently
+      // (final pre-launch audit, July 2026).
+      const optionLabel =
+        rawLabel.length > 100 ? `${rawLabel.slice(0, 97)}…` : rawLabel;
       const { data: meProfile } = await supabase
         .from("profiles")
         .select("full_name")
@@ -325,7 +330,7 @@ export async function votePollAction(input: {
     } catch (e) {
       console.warn("[poll.vote] super-admin push failed", e);
     }
-  })();
+  });
 
   // NO revalidatePath — FeedPollWidget flips the bar percentages
   // optimistically; revalidating here skeleton-flashed the whole feed
@@ -727,7 +732,7 @@ export async function createPostAction(
   if (error) return { error: error.message };
 
   // Super-admin firehose: fire-and-forget push on every new post.
-  void (async () => {
+  runInBackground(async () => {
     try {
       const { data: meProfile } = await supabase
         .from("profiles")
@@ -748,7 +753,7 @@ export async function createPostAction(
     } catch (e) {
       console.warn("[post.create] super-admin push failed", e);
     }
-  })();
+  });
 
   // Parse @mentions out of body and write to post_mentions.
   // Usernames are always lowercased at write time and may contain hyphens
@@ -773,7 +778,7 @@ export async function createPostAction(
       // Fire-and-forget push to mentioned brothers so the poster doesn't
       // wait for each push delivery before the action returns.
       const mentionedIds = mentioned.filter((m) => m.id !== me.id).map((m) => m.id);
-      void (async () => {
+      runInBackground(async () => {
         try {
           const { data: meProfile } = await supabase
             .from("profiles")
@@ -798,18 +803,20 @@ export async function createPostAction(
         } catch (e) {
           console.warn("[post.create] mention push failed (non-fatal)", e);
         }
-      })();
+      });
     }
   }
 
   // Award points — genuinely fire-and-forget now. The old `await` made
   // every post-submit wait on an extra DB round-trip (Codex pre-launch
   // audit, July 2026). Points landing a beat later is invisible.
-  void awardPoints({
-    userId: me.id,
-    action: "post_created",
-    meta: { post_id: post.id, kind },
-  }).catch((e) => console.warn("[post.create] points award failed (non-fatal)", e));
+  runInBackground(() =>
+    awardPoints({
+      userId: me.id,
+      action: "post_created",
+      meta: { post_id: post.id, kind },
+    }),
+  );
 
   // Shape the inserted row into FeedPostShape for the optimistic-prepend
   // path. Fresh posts have zero likes / comments / poll votes so we
@@ -1102,7 +1109,7 @@ export async function addCommentAction(
     const replyTargetId = parentAuthorId;
     const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
     const rowIdForTag = row.id;
-    void (async () => {
+    runInBackground(async () => {
       try {
         await sendPushToUser({
           userId: replyTargetId,
@@ -1116,18 +1123,20 @@ export async function addCommentAction(
       } catch (e) {
         console.warn("[comment.reply] push failed (non-fatal)", e);
       }
-    })();
+    });
   }
 
   // Fire-and-forget (see post_created note — same Codex finding).
-  void awardPoints({
-    userId: me.id,
-    action: "comment_added",
-    meta: { post_id: postId, comment_id: row.id },
-  }).catch((e) => console.warn("[comment.add] points award failed (non-fatal)", e));
+  runInBackground(() =>
+    awardPoints({
+      userId: me.id,
+      action: "comment_added",
+      meta: { post_id: postId, comment_id: row.id },
+    }),
+  );
 
   // Super-admin firehose — every comment pings Dustin.
-  void (async () => {
+  runInBackground(async () => {
     try {
       const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
       await sendPushToSuperAdmins({
@@ -1142,7 +1151,7 @@ export async function addCommentAction(
     } catch (e) {
       console.warn("[comment.add] super-admin push failed", e);
     }
-  })();
+  });
 
   // Parse @mentions, write post_mentions rows, and push the mentioned brothers.
   const mentionedUsernames = Array.from(
@@ -1170,7 +1179,7 @@ export async function addCommentAction(
       const preview =
         trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
       const rowId = row.id;
-      void (async () => {
+      runInBackground(async () => {
         try {
           await Promise.all(
             mentionedIds.map((id) =>
@@ -1188,7 +1197,7 @@ export async function addCommentAction(
         } catch (e) {
           console.warn("[comment.add] mention push failed (non-fatal)", e);
         }
-      })();
+      });
     }
   }
 

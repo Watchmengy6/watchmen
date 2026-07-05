@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Avatar } from "@/components/ui/Avatar";
-import { sendThreadMessageAction, signThreadMediaAction } from "@/lib/dms/actions";
+import { sendThreadMessageAction } from "@/lib/dms/actions";
 import { loadOlderThreadMessagesAction } from "@/lib/dms/pagination";
 import { createBrowserClient } from "@supabase/ssr";
 import { uploadMedia } from "@/lib/uploads/client";
@@ -135,16 +135,18 @@ export function ThreadChatClient({
           // P0.2 — chat-media is private; the stored media_url won't load
           // directly. Mint a membership-checked signed URL for any image/
           // video before rendering. Fall back to the raw value on failure.
-          let signedMediaUrl: string | null = m.media_url ?? null;
-          if (
-            m.media_url &&
-            (m.media_type === "image" || m.media_type === "video")
-          ) {
-            // Sign by message id (server resolves the media from the row,
-            // scoped to this thread) — never trust a client-supplied path.
-            const s = await signThreadMediaAction(threadId, m.id);
-            if (s.url) signedMediaUrl = s.url;
-          }
+          const signedMediaUrl: string | null = m.media_url ?? null;
+          // NOTE (final pre-launch audit, July 2026): we deliberately do
+          // NOT call signThreadMediaAction here anymore. Every realtime
+          // INSERT fans out to EVERY subscriber, and each client firing a
+          // server action per media message meant 100 viewers in the
+          // event chat = 100 serverless invocations PER PHOTO SENT. The
+          // chat-media bucket is currently PUBLIC (the 00048 privacy flip
+          // never took effect in prod), so the stored URL renders as-is.
+          // ⚠️ When the bucket is flipped private post-event, realtime
+          // media needs a signing path again — sign ONCE server-side at
+          // send time, not per-subscriber. See CODEX_PRELAUNCH_AUDIT
+          // signing checklist.
           // If this insert is from ME, reconcile in FIFO order: pop the
           // oldest pending local id and replace that exact placeholder.
           if (m.author_id === meId) {
@@ -211,20 +213,26 @@ export function ThreadChatClient({
             };
             authorCacheRef.current.set(m.author_id, cached);
           }
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: m.id,
-              body: m.body ?? "",
-              media_url: signedMediaUrl,
-              media_type: (m.media_type ?? "none") as "none" | "image" | "video",
-              created_at: m.created_at,
-              author_id: m.author_id,
-              author_name: cached.full_name,
-              author_photo: cached.profile_photo_url,
-              is_me: false,
-            },
-          ]);
+          // Dedupe by id — a realtime INSERT can race a "Load older"
+          // prepend at the timestamp boundary (final pre-launch audit).
+          setMessages((prev) =>
+            prev.some((x) => x.id === m.id)
+              ? prev
+              : [
+                  ...prev,
+                  {
+                    id: m.id,
+                    body: m.body ?? "",
+                    media_url: signedMediaUrl,
+                    media_type: (m.media_type ?? "none") as "none" | "image" | "video",
+                    created_at: m.created_at,
+                    author_id: m.author_id,
+                    author_name: cached.full_name,
+                    author_photo: cached.profile_photo_url,
+                    is_me: false,
+                  },
+                ],
+          );
         },
       )
       .subscribe();
