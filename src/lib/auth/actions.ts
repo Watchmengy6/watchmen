@@ -130,6 +130,77 @@ export async function signupAction(_prev: unknown, formData: FormData) {
   redirect("/pending");
 }
 
+/**
+ * Step 1 of the forgot-password flow: email the member a reset link.
+ *
+ * Supabase sends its "Reset Password" template. That template MUST be
+ * set (Dashboard → Authentication → Emails → Reset Password) to link to:
+ *
+ *   {{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery
+ *
+ * We use the token_hash form (verified server-side in
+ * resetPasswordAction) instead of the default ConfirmationURL because
+ * the member requests the reset inside the NATIVE APP's webview but
+ * opens the email link in Safari — a different browser context, so any
+ * PKCE/code flow would fail with a missing code-verifier. token_hash
+ * verification is context-free and works wherever the link is opened.
+ */
+export async function requestPasswordResetAction(
+  _prev: unknown,
+  formData: FormData,
+) {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { error: "Enter your email address." };
+
+  const supabase = supabaseServer();
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  // Rate-limit errors are worth surfacing; "user not found" is NOT —
+  // never leak which emails have accounts.
+  if (error && /rate|seconds/i.test(error.message)) {
+    return { error: "Too many requests — wait a minute and try again." };
+  }
+  return { sent: true };
+}
+
+/** Step 2: verify the emailed token and set the new password. */
+export async function resetPasswordAction(_prev: unknown, formData: FormData) {
+  const token_hash = String(formData.get("token_hash") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (!token_hash) {
+    return { error: "This reset link is invalid. Request a new one." };
+  }
+  if (password.length < 8) {
+    return { error: "Password must be at least 8 characters." };
+  }
+  if (password !== confirm) {
+    return { error: "Passwords don't match." };
+  }
+
+  const supabase = supabaseServer();
+  // verifyOtp consumes the one-time token and signs the member in (sets
+  // the session cookies), which is what lets updateUser change the
+  // password without knowing the old one.
+  const { error: verifyErr } = await supabase.auth.verifyOtp({
+    type: "recovery",
+    token_hash,
+  });
+  if (verifyErr) {
+    return {
+      error:
+        "This reset link is invalid or has expired. Request a new one from the sign-in screen.",
+    };
+  }
+
+  const { error: updateErr } = await supabase.auth.updateUser({ password });
+  if (updateErr) return { error: updateErr.message };
+
+  // They're signed in with the new password — drop them into the app.
+  // Middleware still bounces non-approved members to /pending.
+  redirect("/app/home");
+}
+
 export async function logoutAction() {
   const supabase = supabaseServer();
   await supabase.auth.signOut();

@@ -20,12 +20,17 @@ export default async function DmsPage({
   // looking for run-club / bible-study chatter, not a one-on-one DM.
   const activeTab = (searchParams?.tab ?? "groups") as "private" | "groups";
 
-  // Threads where I'm a member.
+  // Threads where I'm a member — ONE round-trip with the thread row
+  // embedded through the thread_members.thread_id FK. This used to be
+  // two serial queries (membership ids → threads .in()), which was a
+  // full extra DB trip on every Conversations open (Dustin flagged
+  // message-open speed, July 2026).
   const { data: myThreadRows } = await supabase
     .from("thread_members")
-    .select("thread_id, muted, last_read_at")
+    .select(
+      "thread_id, muted, last_read_at, thread:threads(id, kind, title, last_message_at, last_message_preview, group_id, event_id)",
+    )
     .eq("user_id", profile.id);
-  const threadIds = (myThreadRows ?? []).map((r: any) => r.thread_id);
 
   // Build a lookup: my last_read_at per thread (null = never opened).
   const lastReadMap = new Map<string, string | null>();
@@ -33,13 +38,16 @@ export default async function DmsPage({
     lastReadMap.set(r.thread_id, r.last_read_at ?? null);
   });
 
-  const { data: threads } = threadIds.length
-    ? await supabase
-        .from("threads")
-        .select("id, kind, title, last_message_at, last_message_preview, group_id, event_id")
-        .in("id", threadIds)
-        .order("last_message_at", { ascending: false, nullsFirst: false })
-    : { data: [] };
+  // Unpack the embedded thread rows and order newest-message-first
+  // (nulls last), matching the old `.order("last_message_at", ...)`.
+  const threads = (myThreadRows ?? [])
+    .map((r: any) => (Array.isArray(r.thread) ? r.thread[0] : r.thread))
+    .filter(Boolean)
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.last_message_at ?? 0).getTime() -
+        new Date(a.last_message_at ?? 0).getTime(),
+    );
 
   // A thread is "unread" when it has any message and I haven't read up to it.
   function isUnread(t: any): boolean {

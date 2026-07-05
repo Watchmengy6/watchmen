@@ -17,27 +17,32 @@ export default async function GroupChatPage({
   const { profile } = await requireApproved();
   const supabase = supabaseServer();
 
-  const { data: group } = await supabase
-    .from("groups")
-    .select("id, name")
-    .eq("id", params.groupId)
-    .maybeSingle();
+  // Group, membership, and thread lookups all depend only on the route
+  // param + viewer id — run them in ONE parallel batch instead of three
+  // serial round-trips. Combined with the message fetch below this cuts
+  // group-chat open from 4 sequential DB trips to 2 (Dustin flagged
+  // group open speed, July 2026).
+  const [{ data: group }, { data: membership }, { data: thread }] =
+    await Promise.all([
+      supabase
+        .from("groups")
+        .select("id, name")
+        .eq("id", params.groupId)
+        .maybeSingle(),
+      supabase
+        .from("group_members")
+        .select("user_id")
+        .eq("group_id", params.groupId)
+        .eq("user_id", profile.id)
+        .maybeSingle(),
+      supabase
+        .from("threads")
+        .select("id")
+        .eq("group_id", params.groupId)
+        .maybeSingle(),
+    ]);
   if (!group) notFound();
-
-  // Must be a member.
-  const { data: membership } = await supabase
-    .from("group_members")
-    .select("user_id")
-    .eq("group_id", group.id)
-    .eq("user_id", profile.id)
-    .maybeSingle();
   if (!membership) redirect(`/app/groups/${group.id}`);
-
-  const { data: thread } = await supabase
-    .from("threads")
-    .select("id")
-    .eq("group_id", group.id)
-    .maybeSingle();
   if (!thread) notFound();
 
   // Fetch newest 50 desc, then reverse to render oldest→newest. 50 (not

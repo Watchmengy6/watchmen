@@ -251,7 +251,9 @@ export async function votePollAction(input: {
     }
   })();
 
-  revalidatePath("/app/home");
+  // NO revalidatePath — FeedPollWidget flips the bar percentages
+  // optimistically; revalidating here skeleton-flashed the whole feed
+  // (same class of bug as the comment revalidate, July 2026).
   return { success: true };
 }
 
@@ -1052,7 +1054,11 @@ export async function addCommentAction(
     }
   }
 
-  revalidatePath("/app/home");
+  // NO revalidatePath here. FeedPost appends the returned comment to
+  // local state optimistically; revalidating /app/home re-ran the whole
+  // route tree and flashed the full-feed SKELETON right after commenting
+  // (Dustin's "like then comment → blank feed" repro, July 2026). The
+  // fresh comment shows for everyone else on their next feed load.
   return {
     comment: {
       id: row.id,

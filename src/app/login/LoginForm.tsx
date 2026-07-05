@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { loginAction } from "@/lib/auth/actions";
 // Sign in with Apple was removed for v1.0: Apple's review (June 9 2026)
 // rejected the build because the OAuth flow opened in Safari, which
@@ -37,13 +39,20 @@ export function LoginForm({ next }: { next?: string }) {
       </div>
       <div>
         <Label>Password</Label>
-        <Input
-          type="password"
+        <PasswordInput
           name="password"
           autoComplete="current-password"
           required
           placeholder="••••••••"
         />
+        <div className="mt-2 text-right">
+          <Link
+            href="/forgot-password"
+            className="text-[13px] text-gold-300/90 hover:text-gold-200"
+          >
+            Forgot password?
+          </Link>
+        </div>
       </div>
       {state?.error ? (
         <div className="rounded-xl bg-red-500/10 ring-1 ring-red-500/30 text-red-200 text-sm px-3 py-2">

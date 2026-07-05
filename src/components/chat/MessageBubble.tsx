@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { toggleReactionAction } from "@/lib/chat/actions";
 import { useTransition } from "react";
+import { ImageLightbox } from "@/components/feed/ImageLightbox";
 
 /**
  * Render a chat message body, converting any /app/meetups/<id>,
@@ -120,6 +121,10 @@ export function MessageBubble({
   showName = false,
 }: Props) {
   const [, start] = useTransition();
+  // Full-screen zoomable viewer for image attachments — same lightbox
+  // the feed uses. Dustin: "Can't open full screen image with zoom in
+  // private dm" (July 2026).
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const showAvatar = !mine && (groupPosition === "only" || groupPosition === "last");
   const tightSpacing = groupPosition === "first" || groupPosition === "middle";
 
@@ -177,7 +182,15 @@ export function MessageBubble({
               <img
                 src={message.media_url}
                 alt=""
-                className="rounded-2xl mb-1 max-h-72 object-cover"
+                onClick={(e) => {
+                  // The bubble wrapper is a <button> (double-tap = like);
+                  // stop the tap here so opening the viewer never
+                  // double-fires the like handler.
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setLightboxSrc(message.media_url);
+                }}
+                className="rounded-2xl mb-1 max-h-72 object-cover cursor-zoom-in"
               />
             ) : null}
             {message.media_type === "video" && message.media_url ? (
@@ -223,6 +236,10 @@ export function MessageBubble({
           ) : null}
         </button>
       </div>
+
+      {lightboxSrc ? (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      ) : null}
     </div>
   );
 }

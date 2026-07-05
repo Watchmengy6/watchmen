@@ -1,7 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup", "/invite", "/auth", "/.well-known"];
+const PUBLIC_ROUTES = [
+  "/",
+  "/login",
+  "/signup",
+  "/invite",
+  "/auth",
+  "/.well-known",
+  // Forgot-password flow — both must be reachable signed-out, and
+  // /reset-password is opened from an email link in whatever browser
+  // the member's mail app hands it to.
+  "/forgot-password",
+  "/reset-password",
+];
 
 function isPublic(pathname: string) {
   return PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"));

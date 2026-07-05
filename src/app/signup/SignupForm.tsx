@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { signupAction } from "@/lib/auth/actions";
 
 function Submit({ disabled }: { disabled?: boolean }) {
@@ -46,9 +47,8 @@ export function SignupForm({ inviteCode }: { inviteCode: string }) {
       </div>
       <div>
         <Label>Password</Label>
-        <Input
+        <PasswordInput
           name="password"
-          type="password"
           required
           minLength={8}
           autoComplete="new-password"

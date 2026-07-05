@@ -7,6 +7,7 @@ import { loadOlderThreadMessagesAction } from "@/lib/dms/pagination";
 import { createBrowserClient } from "@supabase/ssr";
 import { uploadMedia } from "@/lib/uploads/client";
 import { ReportButton } from "@/components/moderation/ReportButton";
+import { ImageLightbox } from "@/components/feed/ImageLightbox";
 
 interface Msg {
   id: string;
@@ -46,6 +47,10 @@ export function ThreadChatClient({
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Full-screen zoomable viewer for image attachments — same lightbox
+  // the feed uses (tap to open, pinch/tap to zoom, tap backdrop/× to
+  // close). Dustin: "Can't open full screen image with zoom in private dm".
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // hasMore is true if the initial page hit the server-side page cap
   // (older history likely exists). Compares against initialPageSize
   // because event chat loads 50 and DM/group load 200 — using a
@@ -405,7 +410,8 @@ export function ThreadChatClient({
                     <img
                       src={m.media_url}
                       alt=""
-                      className="rounded-2xl max-h-72 object-cover"
+                      onClick={() => setLightboxSrc(m.media_url!)}
+                      className="rounded-2xl max-h-72 object-cover cursor-zoom-in"
                     />
                   ) : null}
                   {m.media_url && m.media_type === "video" ? (
@@ -449,6 +455,10 @@ export function ThreadChatClient({
           })
         )}
       </div>
+
+      {lightboxSrc ? (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      ) : null}
 
       <div
         className="sticky bottom-0 left-0 right-0 bg-ink-900/95 backdrop-blur-xl border-t border-white/[0.05] px-3 pt-2"

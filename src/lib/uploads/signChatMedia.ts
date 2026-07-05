@@ -55,19 +55,50 @@ export async function signChatMediaUrl(
 /**
  * Batch-sign the media_url on a list of chat messages (only image/video
  * rows are touched). Used by the DM/group/event thread page loaders.
+ *
+ * Perf (July 2026): uses ONE `createSignedUrls` call for the whole page
+ * of messages instead of one storage round-trip per media message. A
+ * photo-heavy thread was paying up to 50 parallel storage calls on
+ * every open — this was a real chunk of the "opening messages is slow"
+ * report from Dustin.
  */
 export async function signMessagesMedia<
   T extends { media_url?: string | null; media_type?: string | null },
 >(messages: T[]): Promise<T[]> {
-  return Promise.all(
-    messages.map(async (m) => {
-      if (
-        m.media_url &&
-        (m.media_type === "image" || m.media_type === "video")
-      ) {
-        return { ...m, media_url: await signChatMediaUrl(m.media_url) };
+  // Collect the chat-media object paths that actually need signing.
+  const paths: string[] = [];
+  const pathByIndex = new Map<number, string>();
+  messages.forEach((m, i) => {
+    if (m.media_url && (m.media_type === "image" || m.media_type === "video")) {
+      const path = chatMediaPath(m.media_url);
+      if (path) {
+        pathByIndex.set(i, path);
+        if (!paths.includes(path)) paths.push(path);
       }
-      return m;
-    }),
-  );
+    }
+  });
+  if (paths.length === 0) return messages;
+
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.storage
+    .from(BUCKET)
+    .createSignedUrls(paths, EXPIRY_SECONDS);
+
+  // Defensive: on signer hiccup, return originals rather than blanking
+  // images (same contract as signChatMediaUrl).
+  const signedByPath = new Map<string, string>();
+  if (!error && data) {
+    data.forEach((row) => {
+      if (row?.path && row.signedUrl && !row.error) {
+        signedByPath.set(row.path, row.signedUrl);
+      }
+    });
+  }
+
+  return messages.map((m, i) => {
+    const path = pathByIndex.get(i);
+    if (!path) return m;
+    const signed = signedByPath.get(path);
+    return signed ? { ...m, media_url: signed } : m;
+  });
 }
