@@ -163,12 +163,21 @@ export function FeedPost({
   function toggleComments() {
     setShowComments((s) => {
       const next = !s;
-      // Lazy-load comments the first time the user expands.
+      // Lazy-load comments the first time the user expands. try/catch:
+      // a rejected server action (network drop, deploy skew between the
+      // cached app bundle and a fresh Vercel deploy) must degrade to an
+      // empty comment list — an unhandled rejection here took down the
+      // whole feed surface.
       if (next && !commentsLoaded) {
         startLoadComments(async () => {
-          const r = await loadPostCommentsAction(post.id);
-          if (!r.error) setComments(r.comments);
-          setCommentsLoaded(true);
+          try {
+            const r = await loadPostCommentsAction(post.id);
+            if (!r.error) setComments(r.comments);
+          } catch {
+            // Leave comments as-is; the user can tap again to retry.
+          } finally {
+            setCommentsLoaded(true);
+          }
         });
       }
       return next;
@@ -249,9 +258,13 @@ export function FeedPost({
     setLikes((c) => (next ? c + 1 : c - 1));
     if (onToggleLike) {
       startTransition(async () => {
-        const r = await onToggleLike(post.id, next);
-        if (r && "error" in r && r.error) {
-          // revert
+        try {
+          const r = await onToggleLike(post.id, next);
+          if (r && "error" in r && r.error) throw new Error(r.error);
+        } catch {
+          // Revert the optimistic flip on ANY failure — including a
+          // rejected action (network drop / deploy skew), which
+          // previously escaped the transition unhandled.
           setLiked(!next);
           setLikes((c) => (next ? c - 1 : c + 1));
         }
@@ -277,12 +290,17 @@ export function FeedPost({
       return;
     }
     startTransition(async () => {
-      const r = await onAddComment(post.id, body);
-      if (r && "comment" in r && r.comment) {
-        setComments((cs) => [...cs, r.comment!]);
-        setDraft("");
-      } else if (r && "error" in r && r.error) {
-        // surface? for now keep draft so user can retry
+      try {
+        const r = await onAddComment(post.id, body);
+        if (r && "comment" in r && r.comment) {
+          setComments((cs) => [...cs, r.comment!]);
+          setDraft("");
+        }
+        // On {error}: keep the draft so the user can retry.
+      } catch {
+        // Rejected action (network drop / deploy skew) — keep the
+        // draft; user retries. Never let this bubble out of the
+        // transition and take down the feed.
       }
     });
   }
@@ -292,13 +310,17 @@ export function FeedPost({
     const next = editDraft.trim();
     if (!next) return;
     startTransition(async () => {
-      const r = await onEditPost(post.id, next);
-      if (r && "error" in r && r.error) {
-        return; // keep the editor open so they can retry
+      try {
+        const r = await onEditPost(post.id, next);
+        if (r && "error" in r && r.error) {
+          return; // keep the editor open so they can retry
+        }
+        const saved = r && "body" in r && r.body ? r.body : next;
+        setBody(saved);
+        setEditing(false);
+      } catch {
+        // Rejected action — keep the editor open for retry.
       }
-      const saved = r && "body" in r && r.body ? r.body : next;
-      setBody(saved);
-      setEditing(false);
     });
   }
 
@@ -311,8 +333,10 @@ export function FeedPost({
     // Optimistic remove; roll back if the server rejects it.
     setComments((cs) => cs.filter((c) => c.id !== commentId));
     startTransition(async () => {
-      const r = await onDeleteComment(commentId);
-      if (r && "error" in r && r.error) {
+      try {
+        const r = await onDeleteComment(commentId);
+        if (r && "error" in r && r.error) setComments(prev);
+      } catch {
         setComments(prev);
       }
     });

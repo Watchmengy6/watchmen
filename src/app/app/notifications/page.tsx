@@ -46,7 +46,12 @@ export default async function NotificationsPage() {
     .limit(100);
 
   return (
-    <div className="pt-8 px-5 pb-8">
+    // Safe-area top padding — without it the ACTIVITY label rendered
+    // underneath the iPhone status bar clock (Aaron, July 2026).
+    <div
+      className="px-5 pb-8"
+      style={{ paddingTop: "max(2rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
+    >
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">Activity</div>

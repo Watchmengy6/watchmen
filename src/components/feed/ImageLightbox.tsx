@@ -172,20 +172,31 @@ export function ImageLightbox({
     pointersRef.current.delete(e.pointerId);
     const g = gestureRef.current;
     if (pointersRef.current.size > 0) return; // other finger still down
-    if (g.pinched) {
+    if (g.pinched && scaleRef.current < 1.05) {
       // Snap back to 1x if the pinch ended just under it.
-      if (scaleRef.current < 1.05) setZoom(1, 0, 0);
+      setZoom(1, 0, 0);
+    }
+    // Taps are handled in onClick — NOT here. Closing on pointerup
+    // unmounted the overlay before iOS dispatched its synthesized
+    // click, so that click landed on whatever sat under the finger on
+    // the page BEHIND (usually the same image) and instantly reopened
+    // the viewer — Dustin/Aaron's "tapping the × does nothing" bug.
+    // Handling taps on click lets the still-mounted overlay absorb the
+    // event, then unmount.
+  }
+
+  function onOverlayClick(e: React.MouseEvent) {
+    const g = gestureRef.current;
+    // A click that follows a pan or pinch isn't a tap — ignore it.
+    if (g.moved || g.pinched) return;
+    if (e.target === imgRef.current) {
+      // Tap on the image toggles zoom at the tapped point.
+      if (scaleRef.current > 1) setZoom(1, 0, 0);
+      else setZoom(2.5, e.clientX, e.clientY);
       return;
     }
-    const isTap = !g.moved && Date.now() - g.downAt < 350;
-    if (!isTap) return;
-    if (!g.downOnImage) {
-      onClose();
-      return;
-    }
-    // Tap on the image toggles zoom at the tapped point.
-    if (scaleRef.current > 1) setZoom(1, 0, 0);
-    else setZoom(2.5, e.clientX, e.clientY);
+    // Tap on the backdrop closes.
+    onClose();
   }
 
   // Escape closes (desktop/web); body scroll locks while open. The
@@ -213,12 +224,16 @@ export function ImageLightbox({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={(e) => pointersRef.current.delete(e.pointerId)}
+      onClick={onOverlayClick}
     >
-      {/* Close — always one tap, from any zoom state. */}
+      {/* Close — always one tap, from any zoom state. Closes on CLICK
+          (not pointerup) so the overlay is still mounted to absorb the
+          event — see the ghost-click note in onPointerUp. */}
       <button
         type="button"
         onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => {
+        onPointerUp={(e) => e.stopPropagation()}
+        onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
