@@ -172,6 +172,9 @@ export function ThreadChatClient({
               );
               return;
             }
+            // The placeholder is about to be replaced by the real row —
+            // its blob preview is no longer referenced anywhere.
+            revokeLocalPreview(targetLocalId);
             setMessages((prev) => {
               const idx = prev.findIndex((x) => x.id === targetLocalId);
               if (idx === -1) return prev;
@@ -236,6 +239,29 @@ export function ThreadChatClient({
     return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  // Object URLs created for optimistic media previews. Each must be
+  // revoked when its placeholder row is replaced (realtime echo) or
+  // rolled back (send failure) — otherwise every photo sent leaks its
+  // full-size blob in webview memory for the life of the page
+  // (Codex pre-launch audit, July 2026).
+  const objectUrlsRef = useRef(new Map<string, string>());
+  function revokeLocalPreview(localId: string | undefined) {
+    if (!localId) return;
+    const url = objectUrlsRef.current.get(localId);
+    if (url) {
+      URL.revokeObjectURL(url);
+      objectUrlsRef.current.delete(localId);
+    }
+  }
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => {
+      // Unmount — release anything still held.
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      urls.clear();
+    };
+  }, []);
+
   function send() {
     const body = text.trim();
     if (!body || pending) return;
@@ -292,6 +318,7 @@ export function ThreadChatClient({
     // P0.2 — show the picked file locally for an instant preview (no bucket
     // dependency); the realtime echo replaces this row with a signed URL.
     const localPreviewUrl = URL.createObjectURL(file);
+    objectUrlsRef.current.set(localId, localPreviewUrl);
     setMessages((prev) => [
       ...prev,
       {
@@ -318,6 +345,7 @@ export function ThreadChatClient({
           (id) => id !== localId,
         );
         setMessages((prev) => prev.filter((m) => m.id !== localId));
+        revokeLocalPreview(localId);
         setErr(r.error);
       }
     });

@@ -47,6 +47,18 @@ export async function loadPostCommentsAction(
     .maybeSingle();
   if (!me || me.status !== "approved") return { comments: [], error: "Approval required." };
 
+  // Gate on the PARENT POST's visibility through normal posts RLS —
+  // without this, anyone holding a UUID could read comments under a
+  // deleted (or block-hidden) post, because the post_comments read
+  // policy is approved-wide (Codex pre-launch audit, July 2026).
+  const { data: parentPost } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("id", postId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!parentPost) return { comments: [] };
+
   const { data } = await supabase
     .from("post_comments")
     .select(
@@ -790,8 +802,14 @@ export async function createPostAction(
     }
   }
 
-  // Award points for the post (fire-and-forget).
-  await awardPoints({ userId: me.id, action: "post_created", meta: { post_id: post.id, kind } });
+  // Award points — genuinely fire-and-forget now. The old `await` made
+  // every post-submit wait on an extra DB round-trip (Codex pre-launch
+  // audit, July 2026). Points landing a beat later is invisible.
+  void awardPoints({
+    userId: me.id,
+    action: "post_created",
+    meta: { post_id: post.id, kind },
+  }).catch((e) => console.warn("[post.create] points award failed (non-fatal)", e));
 
   // Shape the inserted row into FeedPostShape for the optimistic-prepend
   // path. Fresh posts have zero likes / comments / poll votes so we
@@ -1101,7 +1119,12 @@ export async function addCommentAction(
     })();
   }
 
-  await awardPoints({ userId: me.id, action: "comment_added", meta: { post_id: postId, comment_id: row.id } });
+  // Fire-and-forget (see post_created note — same Codex finding).
+  void awardPoints({
+    userId: me.id,
+    action: "comment_added",
+    meta: { post_id: postId, comment_id: row.id },
+  }).catch((e) => console.warn("[comment.add] points award failed (non-fatal)", e));
 
   // Super-admin firehose — every comment pings Dustin.
   void (async () => {

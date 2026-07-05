@@ -43,32 +43,38 @@ export async function approveMemberAction(profileId: string) {
   revalidatePath("/admin/pending");
   revalidatePath("/admin/members");
 
-  // Fire-and-forget welcome email. Email is best-effort — approval
-  // already succeeded, so we never surface a send failure to the admin.
+  // TRULY fire-and-forget welcome email + push. The old code said
+  // "fire-and-forget" but AWAITED getUserById → Resend → APNs serially
+  // before returning — so every tap of Approve waited on three external
+  // providers. With ~200 pending signups on event night (July 11) that
+  // read as a frozen admin screen (Codex pre-launch audit). Approval
+  // itself already committed via the RPC above; notifications are
+  // best-effort in a detached task with their own error handling.
   if (target?.auth_user_id) {
-    try {
-      const admin = supabaseAdmin();
-      const { data: userRes } = await admin.auth.admin.getUserById(target.auth_user_id);
-      const memberEmail = userRes?.user?.email;
-      if (memberEmail) {
-        await welcomeApproved({
-          to: memberEmail,
-          fullName: target.full_name ?? "Brother",
+    const targetAuthUserId = target.auth_user_id;
+    const targetName = target.full_name ?? "Brother";
+    void (async () => {
+      try {
+        const admin = supabaseAdmin();
+        const { data: userRes } = await admin.auth.admin.getUserById(targetAuthUserId);
+        const memberEmail = userRes?.user?.email;
+        if (memberEmail) {
+          await welcomeApproved({ to: memberEmail, fullName: targetName });
+        }
+        // Push too — they may have enabled it from /pending.
+        await sendPushToUser({
+          userId: profileId,
+          payload: {
+            title: "You've been approved 🎉",
+            body: "Continue setting up your account.",
+            url: "/app/home",
+            tag: "approved",
+          },
         });
+      } catch (e) {
+        console.warn("[approve] welcome email/push failed (non-fatal)", e);
       }
-      // Push too — they may have enabled it from /pending.
-      await sendPushToUser({
-        userId: profileId,
-        payload: {
-          title: "You've been approved 🎉",
-          body: "Continue setting up your account.",
-          url: "/app/home",
-          tag: "approved",
-        },
-      });
-    } catch (e) {
-      console.warn("[approve] welcome email failed (non-fatal)", e);
-    }
+    })();
   }
 
   return { success: true };

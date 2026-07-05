@@ -68,6 +68,35 @@ export async function signupAction(_prev: unknown, formData: FormData) {
     };
   }
 
+  // Validate the invite code BEFORE creating the account. Previously a
+  // typo'd/invalid code still created an unattributed pending account —
+  // with 200 signups on event night (July 11) those become silent
+  // attribution holes instead of a clear "check your link" error
+  // (Codex pre-launch audit). Lookup is case-insensitive and we forward
+  // the CANONICAL stored code so the DB trigger's exact match works
+  // even if the member typed it in the wrong case. Service-role client:
+  // profiles.invite_code is column-revoked from `authenticated`.
+  let canonicalInviteCode = invite_code;
+  if (invite_code) {
+    // Escape ilike wildcards — a crafted code of just "%" would
+    // otherwise match ANY member's invite code.
+    const escaped = invite_code.replace(/[\\%_]/g, "\\$&");
+    const { supabaseAdmin } = await import("@/lib/supabase/admin");
+    const { data: inviter } = await supabaseAdmin()
+      .from("profiles")
+      .select("invite_code")
+      .ilike("invite_code", escaped)
+      .limit(1)
+      .maybeSingle();
+    if (!inviter) {
+      return {
+        error:
+          "That invite code isn't valid. Re-open your invite link, or ask the brother who invited you for a fresh one.",
+      };
+    }
+    canonicalInviteCode = inviter.invite_code;
+  }
+
   const supabase = supabaseServer();
   const { error } = await supabase.auth.signUp({
     email,
@@ -79,7 +108,7 @@ export async function signupAction(_prev: unknown, formData: FormData) {
         occupation,
         instagram_url,
         bio,
-        invite_code,
+        invite_code: canonicalInviteCode,
       },
     },
   });
