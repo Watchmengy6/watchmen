@@ -29,6 +29,9 @@ export async function loadPostCommentsAction(
     user_name: string;
     user_photo: string | null;
     user_id: string;
+    parent_id: string | null;
+    like_count: number;
+    my_liked: boolean;
   }[];
   error?: string;
 }> {
@@ -39,7 +42,7 @@ export async function loadPostCommentsAction(
   if (!user) return { comments: [], error: "Not signed in." };
   const { data: me } = await supabase
     .from("profiles")
-    .select("status")
+    .select("id, status")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me || me.status !== "approved") return { comments: [], error: "Approval required." };
@@ -47,11 +50,30 @@ export async function loadPostCommentsAction(
   const { data } = await supabase
     .from("post_comments")
     .select(
-      "id, body, created_at, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
+      "id, body, created_at, parent_comment_id, author:profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)",
     )
     .eq("post_id", postId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
+
+  // Likes for the whole comment set in ONE query; aggregate in JS
+  // (comment volume per post is small). likeCount + whether *I* liked.
+  const ids = (data ?? []).map((c: any) => c.id);
+  const likeCountByComment = new Map<string, number>();
+  const myLiked = new Set<string>();
+  if (ids.length > 0) {
+    const { data: likeRows } = await supabase
+      .from("post_comment_likes")
+      .select("comment_id, user_id")
+      .in("comment_id", ids);
+    (likeRows ?? []).forEach((r: any) => {
+      likeCountByComment.set(
+        r.comment_id,
+        (likeCountByComment.get(r.comment_id) ?? 0) + 1,
+      );
+      if (r.user_id === me.id) myLiked.add(r.comment_id);
+    });
+  }
 
   const comments = (data ?? []).map((c: any) => {
     const a = Array.isArray(c.author) ? c.author[0] : c.author;
@@ -62,9 +84,51 @@ export async function loadPostCommentsAction(
       user_name: a?.full_name ?? "Brother",
       user_photo: a?.profile_photo_url ?? null,
       user_id: a?.id ?? "",
+      parent_id: c.parent_comment_id ?? null,
+      like_count: likeCountByComment.get(c.id) ?? 0,
+      my_liked: myLiked.has(c.id),
     };
   });
   return { comments };
+}
+
+/**
+ * Toggle a like on a COMMENT. Mirrors toggleLikeAction: optimistic on
+ * the client, unique-violation tolerated, no revalidation.
+ */
+export async function toggleCommentLikeAction(
+  commentId: string,
+  nextLiked: boolean,
+): Promise<{ error?: string }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me) return { error: "No profile." };
+
+  if (nextLiked) {
+    const { error } = await supabase
+      .from("post_comment_likes")
+      .insert({ comment_id: commentId, user_id: me.id });
+    // Ignore unique-violation (23505): already liked.
+    if (error && (error as any).code !== "23505") return { error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("post_comment_likes")
+      .delete()
+      .eq("comment_id", commentId)
+      .eq("user_id", me.id);
+    if (error) return { error: error.message };
+  }
+  // No revalidation — client updates optimistically.
+  return {};
 }
 
 /**
@@ -951,6 +1015,10 @@ export async function toggleLikeAction(
 export async function addCommentAction(
   postId: string,
   body: string,
+  /** When replying to a comment: the id of the comment being replied
+   *  to. Replies-to-replies are flattened onto the ORIGINAL top-level
+   *  parent (single-level threading, Instagram-style). */
+  parentCommentId?: string | null,
 ): Promise<{
   error?: string;
   comment?: {
@@ -960,6 +1028,7 @@ export async function addCommentAction(
     user_name: string;
     user_photo?: string | null;
     user_id: string;
+    parent_id?: string | null;
   };
 }> {
   const supabase = supabaseServer();
@@ -979,12 +1048,58 @@ export async function addCommentAction(
   if (!trimmed) return { error: "Empty comment." };
   if (trimmed.length > 5000) return { error: "Comment is too long (5000 char max)." };
 
+  // Resolve + validate the reply target. Flatten reply-to-reply onto
+  // the original top-level parent so threading never nests deeper than
+  // one level. Parent must belong to the same post and not be deleted.
+  let parentId: string | null = null;
+  let parentAuthorId: string | null = null;
+  if (parentCommentId) {
+    const { data: parent } = await supabase
+      .from("post_comments")
+      .select("id, post_id, parent_comment_id, author_id, deleted_at")
+      .eq("id", parentCommentId)
+      .maybeSingle();
+    if (!parent || parent.deleted_at || parent.post_id !== postId) {
+      return { error: "That comment is gone — it may have been deleted." };
+    }
+    parentId = parent.parent_comment_id ?? parent.id;
+    parentAuthorId = parent.author_id;
+  }
+
   const { data: row, error } = await supabase
     .from("post_comments")
-    .insert({ post_id: postId, author_id: me.id, body: trimmed })
-    .select("id, body, created_at")
+    .insert({
+      post_id: postId,
+      author_id: me.id,
+      body: trimmed,
+      parent_comment_id: parentId,
+    })
+    .select("id, body, created_at, parent_comment_id")
     .single();
   if (error) return { error: error.message };
+
+  // Reply push — tell the brother whose comment was replied to (never
+  // yourself). Fire-and-forget so provider latency can't slow the reply.
+  if (parentAuthorId && parentAuthorId !== me.id) {
+    const replyTargetId = parentAuthorId;
+    const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
+    const rowIdForTag = row.id;
+    void (async () => {
+      try {
+        await sendPushToUser({
+          userId: replyTargetId,
+          payload: {
+            title: `${me.full_name} replied to your comment`,
+            body: preview,
+            url: "/app/home",
+            tag: `comment-reply:${rowIdForTag}`,
+          },
+        });
+      } catch (e) {
+        console.warn("[comment.reply] push failed (non-fatal)", e);
+      }
+    })();
+  }
 
   await awardPoints({ userId: me.id, action: "comment_added", meta: { post_id: postId, comment_id: row.id } });
 
@@ -1067,6 +1182,7 @@ export async function addCommentAction(
       user_name: me.full_name,
       user_photo: me.profile_photo_url ?? null,
       user_id: me.id,
+      parent_id: row.parent_comment_id ?? null,
     },
   };
 }

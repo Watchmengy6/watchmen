@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { listMentionableMembers, loadPostCommentsAction } from "@/lib/feed/actions";
+import {
+  listMentionableMembers,
+  loadPostCommentsAction,
+  toggleCommentLikeAction,
+} from "@/lib/feed/actions";
 import { isBirthdayToday } from "@/lib/utils/birthday";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -38,6 +42,10 @@ export interface FeedPostComment {
   user_name: string;
   user_photo?: string | null;
   user_id?: string;
+  /** Top-level parent when this comment is a reply (single-level threading). */
+  parent_id?: string | null;
+  like_count?: number;
+  my_liked?: boolean;
 }
 
 export interface FeedPostTaggedGroup {
@@ -93,10 +101,12 @@ export interface FeedPostProps {
   post: FeedPostShape;
   /** Toggle like. Should optimistically update. */
   onToggleLike?: (postId: string, nextLiked: boolean) => Promise<{ error?: string } | void>;
-  /** Add a comment. Returns the inserted comment if successful. */
+  /** Add a comment (optionally as a reply to another comment).
+   *  Returns the inserted comment if successful. */
   onAddComment?: (
     postId: string,
     body: string,
+    parentCommentId?: string | null,
   ) => Promise<{ comment?: FeedPostComment; error?: string } | void>;
   /** Delete a comment by id. Author-or-admin is enforced server-side. */
   onDeleteComment?: (commentId: string) => Promise<{ error?: string } | void>;
@@ -157,6 +167,9 @@ export function FeedPost({
   );
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
+  // Reply target — set when the user taps "Reply" on a comment. The
+  // composer shows a "Replying to <name>" chip; submit sends parent id.
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [, startLoadComments] = useTransition();
 
@@ -279,6 +292,7 @@ export function FeedPost({
   function submitComment() {
     const body = draft.trim();
     if (!body) return;
+    const parentId = replyTo?.id ?? null;
     if (!onAddComment) {
       setComments((cs) => [
         ...cs,
@@ -288,23 +302,53 @@ export function FeedPost({
           created_at: new Date().toISOString(),
           user_name: meName ?? "You",
           user_photo: meAvatar ?? null,
+          parent_id: parentId,
+          like_count: 0,
+          my_liked: false,
         },
       ]);
       setDraft("");
+      setReplyTo(null);
       return;
     }
     startTransition(async () => {
       try {
-        const r = await onAddComment(post.id, body);
+        const r = await onAddComment(post.id, body, parentId);
         if (r && "comment" in r && r.comment) {
           setComments((cs) => [...cs, r.comment!]);
           setDraft("");
+          setReplyTo(null);
         }
         // On {error}: keep the draft so the user can retry.
       } catch {
         // Rejected action (network drop / deploy skew) — keep the
         // draft; user retries. Never let this bubble out of the
         // transition and take down the feed.
+      }
+    });
+  }
+
+  /** Optimistic heart toggle on a single comment row. */
+  function toggleCommentLike(comment: FeedPostComment) {
+    const next = !comment.my_liked;
+    const apply = (cs: FeedPostComment[], liked: boolean) =>
+      cs.map((c) =>
+        c.id === comment.id
+          ? {
+              ...c,
+              my_liked: liked,
+              like_count: Math.max(0, (c.like_count ?? 0) + (liked ? 1 : -1)),
+            }
+          : c,
+      );
+    setComments((cs) => apply(cs, next));
+    if (post.preview) return; // demo tree — local flip only
+    startTransition(async () => {
+      try {
+        const r = await toggleCommentLikeAction(comment.id, next);
+        if (r?.error) throw new Error(r.error);
+      } catch {
+        setComments((cs) => apply(cs, !next)); // revert on any failure
       }
     });
   }
@@ -334,8 +378,11 @@ export function FeedPost({
       return;
     }
     const prev = comments;
-    // Optimistic remove; roll back if the server rejects it.
-    setComments((cs) => cs.filter((c) => c.id !== commentId));
+    // Optimistic remove — the comment AND its replies (the DB cascade
+    // deletes children server-side; mirror it locally).
+    setComments((cs) =>
+      cs.filter((c) => c.id !== commentId && c.parent_id !== commentId),
+    );
     startTransition(async () => {
       try {
         const r = await onDeleteComment(commentId);
@@ -345,6 +392,112 @@ export function FeedPost({
       }
     });
   }
+
+  // Single-level threading: split loaded comments into top-level rows
+  // and replies grouped under their parent. A reply whose parent isn't
+  // in the set (edge case) falls back to rendering top-level rather
+  // than silently disappearing.
+  const commentIds = new Set(comments.map((c) => c.id));
+  const topLevelComments = comments.filter(
+    (c) => !c.parent_id || !commentIds.has(c.parent_id),
+  );
+  const repliesByParent = new Map<string, FeedPostComment[]>();
+  comments.forEach((c) => {
+    if (c.parent_id && commentIds.has(c.parent_id)) {
+      const arr = repliesByParent.get(c.parent_id) ?? [];
+      arr.push(c);
+      repliesByParent.set(c.parent_id, arr);
+    }
+  });
+
+  /** One comment row — used for both top-level comments and replies. */
+  const renderCommentRow = (c: FeedPostComment) => (
+    <div className="flex items-start gap-2.5">
+      <Link
+        href={post.preview ? "/preview/member" : `/app/members/${c.user_id ?? ""}`}
+        className="shrink-0"
+      >
+        <Avatar src={c.user_photo ?? undefined} name={c.user_name} size={28} />
+      </Link>
+      <div className="flex-1 min-w-0">
+        <div className="rounded-2xl bg-ink-800 hairline px-3 py-2">
+          <div className="flex items-start gap-2">
+            <div className="text-[12.5px] font-semibold text-white flex-1 truncate">
+              {c.user_name}
+            </div>
+            {/* Report — only on others' comments (you can't report your
+                own). Apple-required for any UGC. */}
+            {!(viewerProfileId && c.user_id === viewerProfileId) ? (
+              <ReportButton
+                target={{ kind: "comment", id: c.id }}
+                className="text-ink-400 text-[10.5px] hover:text-white shrink-0"
+                label="Report"
+              />
+            ) : null}
+            {/* Delete — your own comment, or any comment if admin. */}
+            {onDeleteComment &&
+            ((viewerProfileId && c.user_id === viewerProfileId) || isAdmin) ? (
+              <button
+                type="button"
+                onClick={() => handleDeleteComment(c.id)}
+                className="text-ink-400 text-[10.5px] hover:text-red-300 shrink-0"
+              >
+                Delete
+              </button>
+            ) : null}
+          </div>
+          <div
+            className="text-[14px] text-ink-100 leading-snug mt-0.5 whitespace-pre-wrap break-words"
+            style={{ overflowWrap: "anywhere" }}
+          >
+            <RichText text={c.body} blockedUsernames={blockedUsernames} />
+          </div>
+        </div>
+        {/* Footer: time · Like · Reply. Like is optimistic; Reply arms
+            the composer with this comment's THREAD (replies to a reply
+            land under the original top-level parent). */}
+        <div className="flex items-center gap-4 mt-1 px-1.5">
+          <span className="text-[10.5px] text-ink-400">
+            {relativeTime(c.created_at)}
+          </span>
+          <button
+            type="button"
+            onClick={() => toggleCommentLike(c)}
+            className={cn(
+              "flex items-center gap-1 text-[10.5px] font-medium transition-colors",
+              c.my_liked ? "text-pink-300" : "text-ink-400 hover:text-white",
+            )}
+            aria-pressed={!!c.my_liked}
+            aria-label={c.my_liked ? "Unlike comment" : "Like comment"}
+          >
+            {c.my_liked ? (
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                <path d="M12 21s-7-4.5-9.3-9.3C1 8.5 3.2 5 6.6 5c1.8 0 3.4 1 4.4 2.3C12 6 13.6 5 15.4 5 18.8 5 21 8.5 19.3 11.7 17 16.5 12 21 12 21Z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                <path d="M12 21s-7-4.5-9.3-9.3C1 8.5 3.2 5 6.6 5c1.8 0 3.4 1 4.4 2.3C12 6 13.6 5 15.4 5 18.8 5 21 8.5 19.3 11.7 17 16.5 12 21 12 21Z" />
+              </svg>
+            )}
+            {(c.like_count ?? 0) > 0 ? (
+              <span className="tabular-nums">{c.like_count}</span>
+            ) : (
+              <span>Like</span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setReplyTo({ id: c.parent_id ?? c.id, name: c.user_name })
+            }
+            className="text-[10.5px] font-medium text-ink-400 hover:text-white transition-colors"
+          >
+            Reply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <Card className="overflow-hidden">
@@ -605,54 +758,36 @@ export function FeedPost({
             {comments.length === 0 ? (
               <div className="text-ink-400 text-sm">Be the first to comment.</div>
             ) : (
-              comments.map((c) => (
-                <div key={c.id} className="flex items-start gap-2.5">
-                  <Link
-                    href={post.preview ? "/preview/member" : `/app/members/${c.user_id ?? ""}`}
-                    className="shrink-0"
-                  >
-                    <Avatar src={c.user_photo ?? undefined} name={c.user_name} size={28} />
-                  </Link>
-                  <div className="flex-1 min-w-0 rounded-2xl bg-ink-800 hairline px-3 py-2">
-                    <div className="flex items-start gap-2">
-                      <div className="text-[12.5px] font-semibold text-white flex-1 truncate">
-                        {c.user_name}
-                      </div>
-                      {/* Report — only on others' comments (you can't
-                          report your own). Apple-required for any UGC. */}
-                      {!(viewerProfileId && c.user_id === viewerProfileId) ? (
-                        <ReportButton
-                          target={{ kind: "comment", id: c.id }}
-                          className="text-ink-400 text-[10.5px] hover:text-white shrink-0"
-                          label="Report"
-                        />
-                      ) : null}
-                      {/* Delete — your own comment, or any comment if admin. */}
-                      {onDeleteComment &&
-                      ((viewerProfileId && c.user_id === viewerProfileId) || isAdmin) ? (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteComment(c.id)}
-                          className="text-ink-400 text-[10.5px] hover:text-red-300 shrink-0"
-                        >
-                          Delete
-                        </button>
-                      ) : null}
+              topLevelComments.map((c) => (
+                <div key={c.id}>
+                  {renderCommentRow(c)}
+                  {/* Replies — indented one level under the parent. */}
+                  {(repliesByParent.get(c.id) ?? []).map((r) => (
+                    <div key={r.id} className="ml-9 mt-2">
+                      {renderCommentRow(r)}
                     </div>
-                    <div
-                      className="text-[14px] text-ink-100 leading-snug mt-0.5 whitespace-pre-wrap break-words"
-                      style={{ overflowWrap: "anywhere" }}
-                    >
-                      <RichText text={c.body} blockedUsernames={blockedUsernames} />
-                    </div>
-                    <div className="text-[10.5px] text-ink-400 mt-1">
-                      {relativeTime(c.created_at)}
-                    </div>
-                  </div>
+                  ))}
                 </div>
               ))
             )}
             <div className="pt-1">
+              {/* Reply-mode chip — shows who the comment will land under. */}
+              {replyTo ? (
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-[12px] text-ink-300">
+                    Replying to{" "}
+                    <span className="text-gold-300 font-medium">{replyTo.name}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    aria-label="Cancel reply"
+                    className="h-5 w-5 rounded-full bg-ink-800 hairline text-ink-300 text-[11px] leading-none flex items-center justify-center hover:text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : null}
               <div className="flex items-end gap-2">
                 <Avatar src={meAvatar ?? undefined} name={meName ?? "You"} size={28} />
                 <div className="flex-1 min-w-0 flex items-end gap-2">
@@ -670,7 +805,7 @@ export function FeedPost({
                         submitComment();
                       }
                     }}
-                    placeholder="Add a comment…"
+                    placeholder={replyTo ? `Reply to ${replyTo.name}…` : "Add a comment…"}
                     rows={1}
                     spellCheck
                     autoCapitalize="sentences"

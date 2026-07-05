@@ -49,8 +49,8 @@ export function FeedPostClient({
       onToggleLike={async (postId, nextLiked) => {
         return await toggleLikeAction(postId, nextLiked);
       }}
-      onAddComment={async (postId, body) => {
-        return await addCommentAction(postId, body);
+      onAddComment={async (postId, body, parentCommentId) => {
+        return await addCommentAction(postId, body, parentCommentId);
       }}
       onDeleteComment={async (commentId) => {
         return await deleteCommentAction(commentId);
