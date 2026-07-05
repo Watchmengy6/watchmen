@@ -161,27 +161,31 @@ export function FeedPost({
   const [, startLoadComments] = useTransition();
 
   function toggleComments() {
-    setShowComments((s) => {
-      const next = !s;
-      // Lazy-load comments the first time the user expands. try/catch:
-      // a rejected server action (network drop, deploy skew between the
-      // cached app bundle and a fresh Vercel deploy) must degrade to an
-      // empty comment list — an unhandled rejection here took down the
-      // whole feed surface.
-      if (next && !commentsLoaded) {
-        startLoadComments(async () => {
-          try {
-            const r = await loadPostCommentsAction(post.id);
-            if (!r.error) setComments(r.comments);
-          } catch {
-            // Leave comments as-is; the user can tap again to retry.
-          } finally {
-            setCommentsLoaded(true);
-          }
-        });
-      }
-      return next;
-    });
+    // CRITICAL: the comment fetch must be OUTSIDE the setState updater.
+    // The old code called startLoadComments() INSIDE the setShowComments
+    // updater fn. React replays updater functions when it rebases state
+    // across lanes — which happens exactly when ANOTHER transition is
+    // already in flight (e.g. the like action fired a second earlier).
+    // Every replay fired loadPostCommentsAction again; every response
+    // re-rendered and replayed again → INFINITE server-action POST loop
+    // (confirmed live: 28+ POSTs to /app/home in seconds, Vercel 503s,
+    // feed collapsed to the loading skeleton until app restart). This
+    // was Dustin's "like then immediately comment → blank feed" bug.
+    // Updater functions must be PURE — no side effects, ever.
+    const next = !showComments;
+    setShowComments(next);
+    if (next && !commentsLoaded) {
+      startLoadComments(async () => {
+        try {
+          const r = await loadPostCommentsAction(post.id);
+          if (!r.error) setComments(r.comments);
+        } catch {
+          // Leave comments as-is; the user can tap again to retry.
+        } finally {
+          setCommentsLoaded(true);
+        }
+      });
+    }
   }
 
   // @ mention picker for comment input. Mirrors the composer's
