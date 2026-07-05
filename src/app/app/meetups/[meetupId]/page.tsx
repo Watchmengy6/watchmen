@@ -42,12 +42,15 @@ export default async function MeetupDetail({
   const host = Array.isArray(meetup.host) ? meetup.host[0] : meetup.host;
 
   const when = new Date(meetup.when_at);
+  // timeZone is REQUIRED: server component renders on Vercel (UTC) —
+  // without it the meetup time displayed 4-5 hours off (audit 2026-07-05).
   const dateLabel = when.toLocaleString("en-US", {
     weekday: "long",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/New_York",
   });
 
   // Check-in window: starts at when_at, closes at when_at + duration + 30min grace.
@@ -165,6 +168,7 @@ export default async function MeetupDetail({
                   weekday: "short",
                   hour: "numeric",
                   minute: "2-digit",
+                  timeZone: "America/New_York",
                 })}
               </div>
             </div>

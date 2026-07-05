@@ -487,9 +487,13 @@ export function FeedPost({
           </button>
           <button
             type="button"
-            onClick={() =>
-              setReplyTo({ id: c.parent_id ?? c.id, name: c.user_name })
-            }
+            // Pass the TAPPED comment's id (not the pre-flattened
+            // parent): the server flattens threading onto the top-level
+            // parent anyway, but uses the tapped comment's AUTHOR for
+            // the "replied to your comment" push — so replying to a
+            // reply notifies the brother you actually answered
+            // (audit 2026-07-05).
+            onClick={() => setReplyTo({ id: c.id, name: c.user_name })}
             className="text-[10.5px] font-medium text-ink-400 hover:text-white transition-colors"
           >
             Reply

@@ -39,7 +39,16 @@ export function PollDisplay({
               <button
                 key={o.id}
                 onClick={() =>
-                  start(() => void votePollAction({ poll_id: poll.id, option_id: o.id }))
+                  start(async () => {
+                    try {
+                      await votePollAction({ poll_id: poll.id, option_id: o.id });
+                    } catch {
+                      // Rejected action (network drop / deploy skew) —
+                      // swallow rather than surfacing an unhandled
+                      // rejection; the vote simply doesn't stick and
+                      // the member can tap again.
+                    }
+                  })
                 }
                 className={cn(
                   "relative w-full overflow-hidden rounded-xl hairline px-3 py-2.5 text-left",

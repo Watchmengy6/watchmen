@@ -43,7 +43,10 @@ export default async function MembersPage({
   const members = hasMore ? rawMembers.slice(0, PAGE_SIZE) : rawMembers;
 
   return (
-    <div className="pt-8">
+    // Safe-area top padding — static pt-8 let the MEMBERS label sit
+    // under the iPhone status bar (same class of bug as Notifications,
+    // audit 2026-07-05).
+    <div style={{ paddingTop: "max(2rem, calc(env(safe-area-inset-top) + 0.75rem))" }}>
       <div className="px-5 mb-4">
         <div className="text-[11px] tracking-[0.3em] uppercase text-gold-300/80">Members</div>
         <h1 className="mt-2 text-[28px] font-semibold tracking-tight">The Room</h1>

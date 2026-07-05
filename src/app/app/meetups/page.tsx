@@ -17,7 +17,10 @@ export default async function MeetupsPage() {
       "id, title, notes, when_at, duration_min, location_name, category, host:profiles!meetups_host_user_id_fkey(id, full_name, profile_photo_url)",
     )
     .gte("when_at", nowIso)
-    .order("when_at", { ascending: true });
+    .order("when_at", { ascending: true })
+    // Bound the list — without a cap this scales with total future
+    // meetups forever (audit 2026-07-05).
+    .limit(100);
 
   // RSVP counts + my RSVPs.
   const ids = (meetups ?? []).map((m: any) => m.id);
@@ -85,12 +88,16 @@ export default async function MeetupsPage() {
             (meetups ?? []).map((m: any) => {
               const host = Array.isArray(m.host) ? m.host[0] : m.host;
               const when = new Date(m.when_at);
+              // timeZone is REQUIRED: this renders on the SERVER
+              // (Vercel = UTC), so without it every meetup time showed
+              // 4-5 hours off (audit 2026-07-05). Tampa time always.
               const dateLabel = when.toLocaleString("en-US", {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
                 hour: "numeric",
                 minute: "2-digit",
+                timeZone: "America/New_York",
               });
               return (
                 <Link
