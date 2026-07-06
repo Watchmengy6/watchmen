@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { awardPoints } from "@/lib/points/award";
-import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
+import {
+  sendPushToUser,
+  sendPushToSuperAdmins,
+  sendPushToAllApproved,
+} from "@/lib/push/send";
 import type { FeedPostShape } from "@/components/feed/FeedPost";
 import {
   POSTS_QUERY_SELECT,
@@ -641,7 +645,7 @@ export async function createPostAction(
 
   const { data: me } = await supabase
     .from("profiles")
-    .select("id, status")
+    .select("id, status, role")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me || me.status !== "approved") return { error: "Approval required." };
@@ -741,19 +745,31 @@ export async function createPostAction(
         .maybeSingle();
       const senderName = meProfile?.full_name ?? "A brother";
       const preview = body.length > 100 ? `${body.slice(0, 97)}…` : body;
-      await sendPushToSuperAdmins({
-        actorProfileId: me.id,
-        payload: {
-          title: `${senderName} posted`,
-          body: preview,
-          // #post-<id> deep link — tapping the push lands ON the post
-          // (feed scrolls + highlights via ScrollToPostFromHash).
-          url: `/app/home#post-${post.id}`,
-          tag: `post:${post.id}`,
-        },
-      });
+      const payload = {
+        title: `${senderName} posted`,
+        body: preview,
+        // #post-<id> deep link — tapping the push lands ON the post
+        // (feed scrolls + highlights via ScrollToPostFromHash).
+        url: `/app/home#post-${post.id}`,
+        tag: `post:${post.id}`,
+      };
+      if (me.role === "super_admin") {
+        // Dustin (or Aaron) posted — EVERY member gets pinged, not just
+        // the admin firehose (Aaron's ask, July 2026). Their posts are
+        // official announcements to the brotherhood.
+        const r = await sendPushToAllApproved({
+          actorProfileId: me.id,
+          payload,
+        });
+        console.log(
+          `[post.create] super-admin post broadcast to ${r.targeted} members`,
+        );
+      } else {
+        // Regular member post — just the super-admin firehose.
+        await sendPushToSuperAdmins({ actorProfileId: me.id, payload });
+      }
     } catch (e) {
-      console.warn("[post.create] super-admin push failed", e);
+      console.warn("[post.create] post push failed (non-fatal)", e);
     }
   });
 
