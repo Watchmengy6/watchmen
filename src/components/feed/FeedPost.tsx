@@ -170,6 +170,30 @@ export function FeedPost({
   // Reply target — set when the user taps "Reply" on a comment. The
   // composer shows a "Replying to <name>" chip; submit sends parent id.
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+
+  // Deep-link support: when a push notification (or share link) lands
+  // on /app/home#post-<this post>, auto-expand the comment thread so a
+  // "X commented / replied" tap drops the member straight into the
+  // conversation, not just near the post (July 2026).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== `#post-${post.id}`) return;
+    setShowComments(true);
+    if (!commentsLoaded) {
+      startLoadComments(async () => {
+        try {
+          const r = await loadPostCommentsAction(post.id);
+          if (!r.error) setComments(r.comments);
+        } catch {
+          // Non-fatal — member can tap the comment icon to retry.
+        } finally {
+          setCommentsLoaded(true);
+        }
+      });
+    }
+    // Mount-only: the hash is consumed once per page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [pending, startTransition] = useTransition();
   const [, startLoadComments] = useTransition();
 
@@ -504,6 +528,10 @@ export function FeedPost({
   );
 
   return (
+    // id anchor: push notifications and share links deep-link to
+    // /app/home#post-<id>; ScrollToPostFromHash scrolls here and the
+    // scroll-mt clears the sticky feed header (July 2026).
+    <div id={`post-${post.id}`} className="scroll-mt-24">
     <Card className="overflow-hidden">
       <CardBody className="!px-0 !py-0">
         {/* Header — name + avatar tap to profile */}
@@ -862,6 +890,7 @@ export function FeedPost({
         <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       ) : null}
     </Card>
+    </div>
   );
 }
 

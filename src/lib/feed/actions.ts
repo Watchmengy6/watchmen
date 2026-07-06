@@ -323,7 +323,7 @@ export async function votePollAction(input: {
         payload: {
           title: `${meProfile?.full_name ?? "A brother"} voted`,
           body: `"${optionLabel}"`,
-          url: "/app/home",
+          url: `/app/home#post-${input.postId}`,
           tag: `poll-vote:${input.postId}`,
         },
       });
@@ -746,7 +746,9 @@ export async function createPostAction(
         payload: {
           title: `${senderName} posted`,
           body: preview,
-          url: "/app/home",
+          // #post-<id> deep link — tapping the push lands ON the post
+          // (feed scrolls + highlights via ScrollToPostFromHash).
+          url: `/app/home#post-${post.id}`,
           tag: `post:${post.id}`,
         },
       });
@@ -794,7 +796,7 @@ export async function createPostAction(
                 payload: {
                   title: `${senderName} mentioned you`,
                   body: preview,
-                  url: `/app/home`,
+                  url: `/app/home#post-${post.id}`,
                   tag: `mention:${post.id}`,
                 },
               }),
@@ -1116,7 +1118,7 @@ export async function addCommentAction(
           payload: {
             title: `${me.full_name} replied to your comment`,
             body: preview,
-            url: "/app/home",
+            url: `/app/home#post-${postId}`,
             tag: `comment-reply:${rowIdForTag}`,
           },
         });
@@ -1144,7 +1146,7 @@ export async function addCommentAction(
         payload: {
           title: `${me.full_name} commented`,
           body: preview,
-          url: "/app/home",
+          url: `/app/home#post-${postId}`,
           tag: `comment:${row.id}`,
         },
       });
@@ -1188,7 +1190,7 @@ export async function addCommentAction(
                 payload: {
                   title: `${senderName} mentioned you`,
                   body: preview,
-                  url: "/app/home",
+                  url: `/app/home#post-${postId}`,
                   tag: `mention-comment:${rowId}`,
                 },
               }),

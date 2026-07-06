@@ -17,6 +17,8 @@ function hrefForNotification(n: any): string | null {
     case "meetup":
       return `/app/meetups/${id}`;
     case "post":
+      // Deep-link to the post card (ScrollToPostFromHash handles it).
+      return `/app/home#post-${id}`;
     case "comment":
       return `/app/home`;
     case "profile":

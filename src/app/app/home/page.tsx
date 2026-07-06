@@ -16,6 +16,7 @@ import {
   HomeFeedComposer,
   HomePullToRefresh,
 } from "./FeedStateClient";
+import { ScrollToPostFromHash } from "./ScrollToPostFromHash";
 import { Logo } from "@/components/brand/Logo";
 import { AdminPill } from "@/components/admin/AdminPill";
 import { fmtTime } from "@/lib/utils/date";
@@ -203,6 +204,8 @@ export default async function HomePage() {
        wrapper to use the hook. */
     <FeedStateProvider initialPosts={feed}>
     <HomePullToRefresh>
+    {/* Scrolls to + highlights #post-<id> when a push/share deep link lands. */}
+    <ScrollToPostFromHash />
     <div className="min-h-[100dvh] bg-ink-900 pb-28 relative">
       {/* sticky top bar */}
       <div

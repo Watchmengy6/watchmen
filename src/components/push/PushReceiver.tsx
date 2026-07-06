@@ -87,6 +87,15 @@ export function PushReceiver() {
           onClick={() => {
             setBanners((prev) => prev.filter((x) => x.id !== b.id));
             router.push(b.url);
+            // router.push with a #hash doesn't fire hashchange (it's a
+            // pushState), so ScrollToPostFromHash would never see it
+            // when the member is ALREADY on the feed. Nudge it manually
+            // once navigation settles (July 2026 deep-link work).
+            if (b.url.includes("#post-")) {
+              setTimeout(() => {
+                window.dispatchEvent(new Event("hashchange"));
+              }, 400);
+            }
           }}
           className="pointer-events-auto w-full max-w-md rounded-2xl bg-ink-800/95 backdrop-blur-xl hairline shadow-2xl ring-1 ring-gold-500/30 px-4 py-3 text-left active:scale-[0.99] transition-transform"
         >

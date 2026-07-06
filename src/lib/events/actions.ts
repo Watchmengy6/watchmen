@@ -182,7 +182,8 @@ export async function createEventAction(_prev: unknown, formData: FormData) {
         .select("id")
         .eq("status", "approved");
       if (approved && approved.length > 0) {
-        const targetUrl = "/app/events";
+        // Deep link straight to THE event, not the events list.
+        const targetUrl = `/app/events/${insertedEvent.id}`;
         const isSponsored = kind === "sponsored";
         const pushTitle = isSponsored ? "New sponsored event" : "New Watchmen event";
         const dateLabel = new Date(event_date + "T00:00:00").toLocaleDateString(
