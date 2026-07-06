@@ -9,6 +9,9 @@ const tabs = [
   { href: "/admin/members", label: "Members" },
   { href: "/admin/events", label: "Events" },
   { href: "/admin/groups", label: "Groups" },
+  // Super-admin only — the page itself redirects regular admins back
+  // to /admin, the tab just gives Dustin a way in.
+  { href: "/admin/broadcast", label: "Broadcast" },
   { href: "/admin/leaderboard", label: "Leaderboard" },
   { href: "/admin/settings", label: "Settings" },
 ];

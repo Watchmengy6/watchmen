@@ -266,6 +266,38 @@ export async function sendPushToSuperAdmins(opts: {
 }
 
 /**
+ * BROADCAST — send the same payload to EVERY approved member. Used by
+ * the super-admin "Broadcast" tool (July 2026, built for Dustin). Each
+ * send is individually error-isolated so one dead token can't fail the
+ * batch. Returns how many members were targeted (members without push
+ * enabled are targeted but simply have no subscriptions to deliver to).
+ */
+export async function sendPushToAllApproved(opts: {
+  payload: PushPayload;
+  /** Sender's profile id — they don't need a push about their own blast. */
+  actorProfileId?: string;
+}): Promise<{ targeted: number }> {
+  const supabase = svc();
+  const { data: members, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("status", "approved");
+  if (error || !members || members.length === 0) {
+    if (error) console.warn("[push.broadcast] failed to load members", error);
+    return { targeted: 0 };
+  }
+  const targets = members.filter((m) => m.id !== opts.actorProfileId);
+  await Promise.all(
+    targets.map((m) =>
+      sendPushToUser({ userId: m.id, payload: opts.payload }).catch((e) =>
+        console.warn(`[push.broadcast] send failed for ${m.id} (non-fatal)`, e),
+      ),
+    ),
+  );
+  return { targeted: targets.length };
+}
+
+/**
  * Send the same payload to every approved admin. Logs each step so we
  * can debug from Vercel why a signup push didn't land (most common
  * cause: the admin never enabled push on the device they expect it on).

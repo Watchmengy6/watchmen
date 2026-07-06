@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { welcomeApproved } from "@/lib/mail/send";
-import { sendPushToUser } from "@/lib/push/send";
+import { sendPushToUser, sendPushToAllApproved } from "@/lib/push/send";
 
 async function ensureAdmin() {
   const supabase = supabaseServer();
@@ -22,6 +22,63 @@ async function ensureAdmin() {
     return { error: "Admin only.", supabase };
   }
   return { error: null, supabase };
+}
+
+/**
+ * SUPER-ADMIN ONLY — broadcast a push notification to every approved
+ * member (built for Dustin, July 2026). The fan-out runs in the
+ * background via runInBackground/waitUntil so the admin screen returns
+ * instantly; the action reports how many members were targeted.
+ * Members without notifications enabled are counted but unreachable.
+ */
+export async function sendBroadcastPushAction(input: {
+  title: string;
+  body: string;
+}): Promise<{ error?: string; targeted?: number }> {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  // Deliberately STRICTER than ensureAdmin: broadcasts are the loudest
+  // hammer in the app — super_admin (Dustin + Aaron) only.
+  if (!me || me.role !== "super_admin") {
+    return { error: "Super-admin only." };
+  }
+
+  const title = (input.title ?? "").trim();
+  const body = (input.body ?? "").trim();
+  if (!title) return { error: "Give the notification a title." };
+  if (!body) return { error: "Write the message." };
+  if (title.length > 80) return { error: "Title is too long (80 characters max)." };
+  if (body.length > 300) return { error: "Message is too long (300 characters max)." };
+
+  // Count the audience up front so the admin gets a real number back.
+  const admin = supabaseAdmin();
+  const { count } = await admin
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "approved");
+  const targeted = Math.max(0, (count ?? 0) - 1); // minus the sender
+
+  // Unique tag per blast — reusing a tag would make a second broadcast
+  // REPLACE the first in the notification tray.
+  const tag = `broadcast:${Date.now()}`;
+  const senderProfileId = me.id;
+  runInBackground(async () => {
+    const r = await sendPushToAllApproved({
+      actorProfileId: senderProfileId,
+      payload: { title, body, url: "/app/home", tag },
+    });
+    console.log(`[broadcast] "${title}" fanned out to ${r.targeted} members`);
+  });
+
+  return { targeted };
 }
 
 export async function approveMemberAction(profileId: string) {
