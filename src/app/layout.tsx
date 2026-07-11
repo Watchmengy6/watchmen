@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SplashGate } from "@/components/brand/SplashGate";
 import { DeepLinkHandler } from "@/components/native/DeepLinkHandler";
+import { UpdateNotice } from "@/components/system/UpdateNotice";
 
 export const metadata: Metadata = {
   title: "The Watchmen · Got Your 6",
@@ -66,6 +67,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-[100dvh] bg-ink-900 text-white antialiased">
         <SplashGate />
         <DeepLinkHandler />
+        {/* "Update ready — tap to refresh" banner when this bundle's
+            commit SHA no longer matches the deployed one. Root-mounted
+            so it covers login, /pending, /app, and /admin alike. */}
+        <UpdateNotice />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
