@@ -24,10 +24,18 @@ export async function registerNativeDeviceTokenAction(input: {
   if (!user) return { error: "Not signed in." };
   const { data: me } = await supabase
     .from("profiles")
-    .select("id, status")
+    .select("id")
     .eq("auth_user_id", user.id)
     .maybeSingle();
-  if (!me || me.status !== "approved") return { error: "Approval required." };
+  // Any signed-in member — INCLUDING PENDING — may register their own
+  // device token. The old `status !== "approved"` gate silently threw
+  // away tokens from pending members who enabled notifications on the
+  // /pending screen, so the "You've been approved 🎉" push never
+  // reached them (found during the July 2026 signup wave — the web
+  // path never had this gate; native now matches it). What a pending
+  // member can RECEIVE is decided by the senders, all of which are
+  // targeted or approved-only fan-outs.
+  if (!me) return { error: "No profile." };
 
   const token = input.token.trim();
   if (!token) return { error: "Empty token." };

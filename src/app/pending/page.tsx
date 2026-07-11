@@ -7,6 +7,7 @@ import { logoutAction } from "@/lib/auth/actions";
 import { WebOnly } from "@/components/util/WebOnly";
 import { EnablePushButton } from "@/components/push/EnablePushButton";
 import { PendingAutoRefresh } from "./PendingAutoRefresh";
+import { PendingPushBridge } from "./PendingPushBridge";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,10 @@ export default async function PendingPage() {
           member lands in the app without touching anything. Skipped
           for rejected members (nothing to poll for). */}
       {!rejected ? <PendingAutoRefresh /> : null}
+      {/* Wires the native token listener + silently re-registers
+          already-granted devices so the approval push actually lands.
+          See PendingPushBridge for the two bugs this fixes. */}
+      {!rejected ? <PendingPushBridge /> : null}
       <div className="flex justify-center mb-5">
         <Logo className="h-16 w-16 text-gold-400" />
       </div>
