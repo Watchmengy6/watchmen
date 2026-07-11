@@ -1110,29 +1110,6 @@ export async function addCommentAction(
     .single();
   if (error) return { error: error.message };
 
-  // Reply push — tell the brother whose comment was replied to (never
-  // yourself). Fire-and-forget so provider latency can't slow the reply.
-  if (parentAuthorId && parentAuthorId !== me.id) {
-    const replyTargetId = parentAuthorId;
-    const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
-    const rowIdForTag = row.id;
-    runInBackground(async () => {
-      try {
-        await sendPushToUser({
-          userId: replyTargetId,
-          payload: {
-            title: `${me.full_name} replied to your comment`,
-            body: preview,
-            url: `/app/home#post-${postId}`,
-            tag: `comment-reply:${rowIdForTag}`,
-          },
-        });
-      } catch (e) {
-        console.warn("[comment.reply] push failed (non-fatal)", e);
-      }
-    });
-  }
-
   // Fire-and-forget (see post_created note — same Codex finding).
   runInBackground(() =>
     awardPoints({
@@ -1142,30 +1119,14 @@ export async function addCommentAction(
     }),
   );
 
-  // Super-admin firehose — every comment pings Dustin.
-  runInBackground(async () => {
-    try {
-      const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
-      await sendPushToSuperAdmins({
-        actorProfileId: me.id,
-        payload: {
-          title: `${me.full_name} commented`,
-          body: preview,
-          url: `/app/home#post-${postId}`,
-          tag: `comment:${row.id}`,
-        },
-      });
-    } catch (e) {
-      console.warn("[comment.add] super-admin push failed", e);
-    }
-  });
-
-  // Parse @mentions, write post_mentions rows, and push the mentioned brothers.
+  // Parse @mentions and write post_mentions rows. Pushes for mentions
+  // are folded into the consolidated fan-out below.
   const mentionedUsernames = Array.from(
     new Set(
       (trimmed.match(/@([\w-]+)/g) ?? []).map((s) => s.slice(1).toLowerCase()),
     ),
   );
+  let mentionedIds: string[] = [];
   if (mentionedUsernames.length > 0) {
     const { data: mentioned } = await supabase
       .from("profiles")
@@ -1179,34 +1140,78 @@ export async function addCommentAction(
           mentioned_user_id: m.id,
         })),
       );
-      // Fire-and-forget push so the commenter sees their reply land
-      // instantly while pushes deliver in the background.
-      const mentionedIds = mentioned.filter((m) => m.id !== me.id).map((m) => m.id);
-      const senderName = me.full_name;
-      const preview =
-        trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
-      const rowId = row.id;
-      runInBackground(async () => {
-        try {
-          await Promise.all(
-            mentionedIds.map((id) =>
-              sendPushToUser({
-                userId: id,
-                payload: {
-                  title: `${senderName} mentioned you`,
-                  body: preview,
-                  url: `/app/home#post-${postId}`,
-                  tag: `mention-comment:${rowId}`,
-                },
-              }),
-            ),
-          );
-        } catch (e) {
-          console.warn("[comment.add] mention push failed (non-fatal)", e);
-        }
-      });
+      mentionedIds = mentioned.map((m) => m.id);
     }
   }
+
+  // ── Comment notification fan-out (policy set by Aaron, July 2026) ──
+  // The old super-admin FIREHOSE (every comment pinged Dustin + Aaron)
+  // is GONE — it became spam the moment the room got active. A comment
+  // now notifies exactly the people it involves, each person ONCE, with
+  // the most specific reason winning:
+  //   1. @mentioned in the comment      → "X mentioned you"
+  //   2. the comment being replied to   → "X replied to your comment"
+  //   3. the post's author              → "X commented on your post"
+  //   4. others who commented earlier   → "X also commented"
+  // The commenter never notifies themselves. Everyone else: silence.
+  const commenterId = me.id;
+  const commenterName = me.full_name;
+  const newCommentId = row.id;
+  const replyTargetId = parentAuthorId;
+  const preview = trimmed.length > 100 ? `${trimmed.slice(0, 97)}…` : trimmed;
+  const deepLink = `/app/home#post-${postId}`;
+  runInBackground(async () => {
+    try {
+      // Post author + everyone who commented on this post before now.
+      const admin = supabaseAdmin();
+      const [{ data: post }, { data: priorComments }] = await Promise.all([
+        admin.from("posts").select("author_id").eq("id", postId).maybeSingle(),
+        admin
+          .from("post_comments")
+          .select("author_id")
+          .eq("post_id", postId)
+          .is("deleted_at", null)
+          .neq("id", newCommentId),
+      ]);
+
+      // reason per recipient — later assignments do NOT overwrite
+      // earlier (more specific) ones.
+      const reasons = new Map<string, "mention" | "reply" | "author" | "participant">();
+      const claim = (id: string | null | undefined, reason: "mention" | "reply" | "author" | "participant") => {
+        if (!id || id === commenterId) return;
+        if (!reasons.has(id)) reasons.set(id, reason);
+      };
+      mentionedIds.forEach((id) => claim(id, "mention"));
+      claim(replyTargetId, "reply");
+      claim(post?.author_id, "author");
+      (priorComments ?? []).forEach((c: any) => claim(c.author_id, "participant"));
+
+      const TITLES = {
+        mention: `${commenterName} mentioned you`,
+        reply: `${commenterName} replied to your comment`,
+        author: `${commenterName} commented on your post`,
+        participant: `${commenterName} also commented`,
+      } as const;
+
+      await Promise.all(
+        Array.from(reasons.entries()).map(([userId, reason]) =>
+          sendPushToUser({
+            userId,
+            payload: {
+              title: TITLES[reason],
+              body: preview,
+              url: deepLink,
+              tag: `comment-${reason}:${newCommentId}`,
+            },
+          }).catch((e) =>
+            console.warn(`[comment.notify] ${reason} push failed for ${userId} (non-fatal)`, e),
+          ),
+        ),
+      );
+    } catch (e) {
+      console.warn("[comment.notify] fan-out failed (non-fatal)", e);
+    }
+  });
 
   // NO revalidatePath here. FeedPost appends the returned comment to
   // local state optimistically; revalidating /app/home re-ran the whole
