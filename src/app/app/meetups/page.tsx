@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic";
 
 export default async function MeetupsPage() {
   const { profile } = await requireApproved();
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   const supabase = supabaseServer();
 
   const nowIso = new Date().toISOString();
@@ -59,18 +58,17 @@ export default async function MeetupsPage() {
               Meetups
             </div>
           </div>
-          {isAdmin ? (
-            <Link
-              href="/app/meetups/new"
-              className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black inline-flex items-center gap-1.5"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                   strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              New
-            </Link>
-          ) : null}
+          {/* Every approved member can host a meetup (July 2026). */}
+          <Link
+            href="/app/meetups/new"
+            className="h-9 px-4 rounded-full text-[13px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black inline-flex items-center gap-1.5"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                 strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            New
+          </Link>
         </div>
       </div>
 

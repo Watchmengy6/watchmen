@@ -45,19 +45,20 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   if (!user) return;
   const { data: me } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, status")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me) return;
 
-  // Belt-and-suspenders: meetups are admin-only per Dustin. RLS in
-  // migration 00020 enforces this at the DB layer, but we also check
-  // here so we get a clean redirect (instead of a silent RLS failure)
-  // and so the check works even if the migration hasn't been applied
-  // yet on a given environment.
-  if (me.role !== "admin" && me.role !== "super_admin") {
+  // Meetups are open to EVERY approved member (Dustin reversed the
+  // 00020 admin-only lockdown, July 2026): brothers self-organize
+  // coffee / workouts / drinks, and the meetup announces itself on the
+  // feed. Official EVENTS remain super-admin-only — that's unchanged.
+  // Migration 00052 restores the approved-insert RLS to match.
+  if (me.status !== "approved") {
     redirect("/app/meetups");
   }
+  const hostIsAdmin = me.role === "admin" || me.role === "super_admin";
 
   const { data: m, error } = await supabase
     .from("meetups")
@@ -104,9 +105,12 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
   // was deleted (migration 00020). The feed post above is the only
   // broadcast surface now.
 
-  // Fire-and-forget push fan-out — the host shouldn't wait for every
-  // recipient's push to deliver before being redirected to the meetup.
-  runInBackground(async () => {
+  // Push fan-out — ADMIN-hosted meetups only. When meetups were
+  // admin-locked, pushing every member per meetup was fine; now that
+  // any brother can host, a per-meetup all-member push would violate
+  // the "nobody gets blown up" notification policy (July 2026). Member
+  // meetups announce via the feed post above; admins keep the megaphone.
+  if (hostIsAdmin) runInBackground(async () => {
     try {
       const admin = supabaseAdmin();
       const [{ data: approved }, { data: hostProfile }] = await Promise.all([
@@ -121,6 +125,9 @@ export async function createMeetupAction(formData: FormData): Promise<void> {
           day: "numeric",
           hour: "numeric",
           minute: "2-digit",
+          // Server renders in UTC — pin to Tampa time (same bug class
+          // the July audit fixed on the meetup pages).
+          timeZone: "America/New_York",
         });
         const pushBody = `${title} · ${whenLabel}${locationName ? ` · ${locationName}` : ""}`;
         await Promise.all(

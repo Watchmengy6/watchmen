@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { requireApproved } from "@/lib/auth/gates";
 import { createMeetupAction } from "@/lib/meetups/realActions";
 import { TzOffsetField } from "./TzOffsetField";
@@ -10,14 +9,10 @@ export const dynamic = "force-dynamic";
 const CATEGORIES = ["Coffee", "Workout", "Drinks", "Outdoors", "Food", "Other"];
 
 export default async function NewMeetupPage() {
-  const { profile } = await requireApproved();
-  // Meetups are admin-only per Dustin. Non-admins get bounced back to
-  // the Groups tab (filtered to meet-ups) instead of the standalone
-  // /app/meetups list, which has no bottom-nav entry and would strand
-  // them on a dead-end page.
-  if (profile.role !== "admin" && profile.role !== "super_admin") {
-    redirect("/app/groups?tab=meetup");
-  }
+  // Open to EVERY approved member (Dustin reversed the 00020 admin-only
+  // lockdown, July 2026) — brothers self-organize meetups and the
+  // meetup auto-posts to the feed. Official EVENTS stay super-admin-only.
+  await requireApproved();
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
       <div
