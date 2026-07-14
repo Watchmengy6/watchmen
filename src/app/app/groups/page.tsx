@@ -42,7 +42,10 @@ export default async function GroupsPage({
   const [{ data: allGroups }, { data: myMemberships }] = await Promise.all([
     supabase
       .from("groups")
-      .select("id, name, description, category, kind, cover_url, created_at")
+      // status: RLS (00053) already hides OTHER people's pending
+      // requests — a pending row only reaches us if it's OURS (or
+      // we're an admin), so the card just needs the "Pending" chip.
+      .select("id, name, description, category, kind, cover_url, created_at, status")
       .order("created_at", { ascending: false })
       // Cap at 100. Watchmen is invite-only with ~100 brothers; even
       // if every brother created two groups we'd hit 200 max, but
@@ -160,6 +163,11 @@ export default async function GroupsPage({
                       {myGroupIds.has(g.id) ? (
                         <span className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 inline-flex items-center shrink-0">
                           Joined
+                        </span>
+                      ) : null}
+                      {g.status === "pending" ? (
+                        <span className="text-[9px] px-1.5 h-4 rounded-full bg-gold-500/15 text-gold-300 inline-flex items-center shrink-0">
+                          Pending approval
                         </span>
                       ) : null}
                     </div>

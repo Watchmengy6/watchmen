@@ -4,6 +4,10 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteGroupButton } from "./DeleteGroupButton";
 import { requireAdmin } from "@/lib/auth/gates";
+import {
+  approveGroupRequestAction,
+  rejectGroupRequestAction,
+} from "@/lib/groups/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +40,13 @@ export default async function AdminGroupsPage() {
 
   const { data: groups } = await supabase
     .from("groups")
-    .select("id, name, slug, category, kind, is_private, cover_url, created_at")
+    .select(
+      "id, name, slug, category, kind, is_private, cover_url, created_at, status, creator:profiles!groups_created_by_fkey(full_name)",
+    )
     .order("created_at", { ascending: false });
+
+  const pendingRequests = (groups ?? []).filter((g: any) => g.status === "pending");
+  const liveGroups = (groups ?? []).filter((g: any) => g.status !== "pending");
 
   // Member counts — separate query to avoid pulling huge member rows
   // into the list shell. group_members has ON DELETE CASCADE so this
@@ -53,16 +62,62 @@ export default async function AdminGroupsPage() {
 
   return (
     <div className="px-5 space-y-3 pb-8">
+      {/* Pending group requests — members request, Dustin approves.
+          (Request-and-approve model, July 2026.) */}
+      {pendingRequests.length > 0 ? (
+        <>
+          <div className="text-[11px] tracking-[0.25em] uppercase text-gold-300/90 mb-1">
+            Requests ({pendingRequests.length})
+          </div>
+          {pendingRequests.map((g: any) => {
+            const creator = Array.isArray(g.creator) ? g.creator[0] : g.creator;
+            return (
+              <Card key={g.id} className="p-4 ring-1 ring-gold-500/30">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="gold">request</Badge>
+                  {g.category ? <Badge variant="muted">{g.category}</Badge> : null}
+                </div>
+                <div className="mt-1.5 font-semibold">{g.name}</div>
+                <div className="text-ink-300 text-xs mt-0.5">
+                  Requested by {creator?.full_name ?? "a member"}
+                  {g.created_at ? ` · ${fmtCreated(g.created_at)}` : ""}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <form action={rejectGroupRequestAction}>
+                    <input type="hidden" name="group_id" value={g.id} />
+                    <button
+                      type="submit"
+                      className="w-full h-10 rounded-full bg-ink-800 hairline text-ink-200 text-[13px] font-medium"
+                    >
+                      Decline
+                    </button>
+                  </form>
+                  <form action={approveGroupRequestAction}>
+                    <input type="hidden" name="group_id" value={g.id} />
+                    <button
+                      type="submit"
+                      className="w-full h-10 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black text-[13px] font-semibold"
+                    >
+                      Approve
+                    </button>
+                  </form>
+                </div>
+              </Card>
+            );
+          })}
+        </>
+      ) : null}
+
       <div className="text-[11px] tracking-[0.25em] uppercase text-ink-300 mb-1">
-        Groups ({groups?.length ?? 0})
+        Groups ({liveGroups.length})
       </div>
 
-      {(groups ?? []).length === 0 ? (
+      {liveGroups.length === 0 ? (
         <Card className="p-4">
           <div className="text-ink-300 text-sm">No groups yet.</div>
         </Card>
       ) : (
-        (groups ?? []).map((g) => (
+        liveGroups.map((g: any) => (
           <Card key={g.id} className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">

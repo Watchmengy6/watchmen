@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sendPushToUser, sendPushToSuperAdmins } from "@/lib/push/send";
+import { runInBackground } from "@/lib/utils/background";
 
 const CATEGORIES = [
   "business",
@@ -46,12 +49,18 @@ export async function createGroupAction(formData: FormData): Promise<void> {
 
   const { data: me } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, role, full_name")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!me) return;
 
-  let baseSlug = slugify(name) || "group";
+  // Request-and-approve model (Dustin's call, July 2026): super-admin
+  // groups go live instantly; everyone else's group is created as a
+  // PENDING REQUEST — visible only to them + admins (RLS, migration
+  // 00053) until approved in the Command Room.
+  const goesLiveInstantly = me.role === "super_admin";
+
+  const baseSlug = slugify(name) || "group";
   let slug = baseSlug;
   let suffix = 0;
   // Ensure uniqueness — small loop.
@@ -81,6 +90,7 @@ export async function createGroupAction(formData: FormData): Promise<void> {
       kind,
       cover_url: coverUrl,
       created_by: me.id,
+      status: goesLiveInstantly ? "active" : "pending",
     })
     .select("id")
     .single();
@@ -89,8 +99,141 @@ export async function createGroupAction(formData: FormData): Promise<void> {
     redirect("/app/groups");
   }
 
+  // New request — ping the super admins so Dustin can approve from
+  // the Command Room without waiting to stumble across it.
+  if (!goesLiveInstantly) {
+    const requesterName = me.full_name ?? "A brother";
+    const requesterId = me.id;
+    const groupName = name;
+    runInBackground(async () => {
+      try {
+        await sendPushToSuperAdmins({
+          actorProfileId: requesterId,
+          payload: {
+            title: "Group request",
+            body: `${requesterName} wants to start "${groupName}"`,
+            url: "/admin/groups",
+            tag: `group-request:${g.id}`,
+          },
+        });
+      } catch (e) {
+        console.warn("[group.request] push failed (non-fatal)", e);
+      }
+    });
+  }
+
   revalidatePath("/app/groups");
   redirect(`/app/groups/${g.id}`);
+}
+
+/**
+ * ADMIN — approve a pending group request: flips it live and tells the
+ * requester. Service-role write (page is admin-gated; we re-check here).
+ */
+export async function approveGroupRequestAction(formData: FormData) {
+  const groupId = String(formData.get("group_id") ?? "").trim();
+  if (!groupId) return;
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || (me.role !== "admin" && me.role !== "super_admin")) return;
+
+  const admin = supabaseAdmin();
+  const { data: g } = await admin
+    .from("groups")
+    .select("id, name, created_by, status")
+    .eq("id", groupId)
+    .maybeSingle();
+  if (!g || g.status !== "pending") return;
+
+  const { error } = await admin
+    .from("groups")
+    .update({ status: "active" })
+    .eq("id", groupId)
+    .eq("status", "pending");
+  if (error) {
+    console.error("[group.approve]", error);
+    return;
+  }
+
+  runInBackground(async () => {
+    try {
+      await sendPushToUser({
+        userId: g.created_by,
+        payload: {
+          title: "Your group is live 🎉",
+          body: `"${g.name}" was approved — brothers can join it now.`,
+          url: `/app/groups/${g.id}`,
+          tag: `group-approved:${g.id}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[group.approve] push failed (non-fatal)", e);
+    }
+  });
+
+  revalidatePath("/admin/groups");
+  revalidatePath("/app/groups");
+}
+
+/**
+ * ADMIN — decline a pending group request: deletes the group (cascade
+ * cleans members/thread) and tells the requester.
+ */
+export async function rejectGroupRequestAction(formData: FormData) {
+  const groupId = String(formData.get("group_id") ?? "").trim();
+  if (!groupId) return;
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!me || (me.role !== "admin" && me.role !== "super_admin")) return;
+
+  const admin = supabaseAdmin();
+  const { data: g } = await admin
+    .from("groups")
+    .select("id, name, created_by, status")
+    .eq("id", groupId)
+    .maybeSingle();
+  if (!g || g.status !== "pending") return;
+
+  const { error } = await admin.from("groups").delete().eq("id", groupId);
+  if (error) {
+    console.error("[group.reject]", error);
+    return;
+  }
+
+  runInBackground(async () => {
+    try {
+      await sendPushToUser({
+        userId: g.created_by,
+        payload: {
+          title: "Group request declined",
+          body: `"${g.name}" wasn't approved this time — reach out to Dustin with questions.`,
+          url: "/app/groups",
+          tag: `group-rejected:${groupId}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[group.reject] push failed (non-fatal)", e);
+    }
+  });
+
+  revalidatePath("/admin/groups");
+  revalidatePath("/app/groups");
 }
 
 export async function joinGroupAction(formData: FormData) {

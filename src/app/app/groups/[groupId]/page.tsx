@@ -19,10 +19,13 @@ export default async function GroupDetail({
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, description, category, cover_url, created_at, created_by")
+    .select("id, name, description, category, cover_url, created_at, created_by, status")
     .eq("id", params.groupId)
     .maybeSingle();
   if (!group) notFound();
+  // RLS (00053) means a pending group only reaches its creator or an
+  // admin — everyone else already got notFound above.
+  const isPendingRequest = (group as any).status === "pending";
 
   // Members + thread both depend only on group.id, not on each other —
   // run in parallel. Saves ~one round-trip on every group open; per the
@@ -68,6 +71,21 @@ export default async function GroupDetail({
       </div>
 
       <div className="px-4 pt-4 space-y-4">
+        {/* Pending-request banner — only the creator (and admins) can
+            even see this page while pending (RLS, migration 00053). */}
+        {isPendingRequest ? (
+          <div className="rounded-2xl bg-gold-500/10 ring-1 ring-gold-500/30 px-4 py-3">
+            <div className="text-gold-200 text-[13px] font-semibold">
+              Waiting for approval
+            </div>
+            <p className="text-ink-200 text-[12.5px] mt-0.5 leading-relaxed">
+              Dustin reviews new groups before they go live. Only you can
+              see this group right now — you&apos;ll get a notification
+              when it&apos;s approved.
+            </p>
+          </div>
+        ) : null}
+
         {/* Hero */}
         {group.cover_url ? (
           <div className="rounded-2xl overflow-hidden ring-1 ring-gold-500/30">

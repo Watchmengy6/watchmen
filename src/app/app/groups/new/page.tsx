@@ -18,7 +18,11 @@ const CATEGORIES = [
 ];
 
 export default async function NewGroupPage() {
-  await requireApproved();
+  const { profile } = await requireApproved();
+  // Members REQUEST groups (Dustin approves in the Command Room);
+  // super-admin groups go live instantly. Same form either way — only
+  // the copy changes so members know what to expect.
+  const isSuper = profile.role === "super_admin";
   return (
     <div className="min-h-[100dvh] bg-ink-900 pb-28">
       <div
@@ -73,8 +77,14 @@ export default async function NewGroupPage() {
           type="submit"
           className="w-full h-12 rounded-full text-[15px] font-semibold bg-gradient-to-b from-gold-300 to-gold-500 text-black"
         >
-          Create group
+          {isSuper ? "Create group" : "Request group"}
         </button>
+        {!isSuper ? (
+          <p className="text-center text-[12px] text-ink-400 leading-relaxed">
+            New groups are reviewed before they go live. You&apos;ll get a
+            notification when yours is approved.
+          </p>
+        ) : null}
       </form>
     </div>
   );
