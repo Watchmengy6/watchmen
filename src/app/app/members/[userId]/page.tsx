@@ -8,6 +8,7 @@ import { InterestChipsReadOnly } from "@/components/profile/InterestChips";
 import { BlockButton } from "@/components/moderation/BlockButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { isBirthdayToday } from "@/lib/utils/birthday";
+import { startDmAction } from "@/lib/dms/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +120,27 @@ export default async function MemberProfile({ params }: { params: { userId: stri
               <Badge variant="muted">{m.status}</Badge>
             ) : null}
           </div>
+
+          {/* Message — one tap opens (or creates) the DM thread with
+              this brother via find_or_create_dm. The RPC rejects
+              blocked / non-approved targets server-side. Hidden on your
+              own profile. (Added July 2026 — before this, the only way
+              to start a DM was Chats → New → find the name.) */}
+          {!isSelf && m.status === "approved" ? (
+            <form action={startDmAction} className="mt-4">
+              <input type="hidden" name="other_profile_id" value={m.id} />
+              <button
+                type="submit"
+                className="h-10 px-6 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-black text-[13.5px] font-semibold inline-flex items-center gap-2"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                     strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M21 12c0 4.2-4 7.5-9 7.5-1.4 0-2.7-.25-3.85-.7L3 21l1.55-4.4C3.6 15.4 3 13.75 3 12 3 7.85 7 4.5 12 4.5s9 3.35 9 7.5Z" />
+                </svg>
+                Message
+              </button>
+            </form>
+          ) : null}
 
           {/* Social / pay quick links */}
           {(igUrl || venmoUrl || cashappUrl) ? (
